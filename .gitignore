@@ -115,8 +115,7 @@ Thumbs.db
 .expo-shared/
 web-build/
 
-# Expo Go
-.expo/
+# Expo Go (only ignore .expo in root, not in apps/)
 
 # React Native
 *.jks
@@ -358,3 +357,47 @@ cython_debug/
 
 # Project specific
 # Add any project-specific ignores below this line
+
+# Ensure mobile app files are tracked
+!apps/mobile/
+!apps/mobile/**/*
+!apps/mobile/assets/
+!apps/mobile/assets/**
+
+# But ignore Expo-specific build artifacts in mobile app
+apps/mobile/.expo/
+apps/mobile/web-build/
+apps/mobile/android/
+apps/mobile/ios/
+apps/mobile/.expo-shared/
+
+# Ensure functions are tracked
+!apps/functions/
+!apps/functions/**/*
+
+# But ignore function build artifacts
+apps/functions/_deno/
+apps/functions/.deno/
+
+# Ensure packages are tracked
+!packages/
+!packages/**/*
+
+# But ignore package build artifacts
+packages/*/dist/
+packages/*/build/
+packages/*/node_modules/
+
+# Ensure database files are tracked
+!db/
+!db/**/*
+
+# Ensure infrastructure is tracked
+!infra/
+!infra/**/*
+
+# Root level files that should be tracked
+!package.json
+!turbo.json
+!README.md
+!.gitignore
