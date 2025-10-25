@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -14,7 +14,8 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.flashcards.app"
+      "bundleIdentifier": "com.flashcards.app",
+      "newArchEnabled": false
     },
     "android": {
       "adaptiveIcon": {
@@ -23,7 +24,8 @@
       },
       "package": "com.flashcards.app",
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "newArchEnabled": false
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -31,7 +33,12 @@
     },
     "scheme": "flashcards",
     "plugins": [
-      "expo-router"
+      [
+        "expo-router",
+        {
+          "root": "./app"
+        }
+      ]
     ]
   }
 }
