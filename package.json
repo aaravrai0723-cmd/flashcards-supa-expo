@@ -13,8 +13,11 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "gen:types": "supabase gen types typescript --local > packages/sdk/src/types/database.ts",
-    "db:push": "echo 'TODO: Run SQL migrations' && exit 0",
+    "gen:types": "supabase gen types typescript --linked > packages/sdk/src/types/database.ts",
+    "gen:types:local": "supabase gen types typescript --local > packages/sdk/src/types/database.ts",
+    "db:push": "supabase db push",
+    "db:seed": "./scripts/seed-manual-instructions.sh",
+    "db:seed:psql": "./scripts/seed-remote-simple.sh",
     "clean": "turbo run clean && rm -rf node_modules",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\""
@@ -24,6 +27,7 @@
     "@types/node": "^20.11.0",
     "eslint": "^8.56.0",
     "prettier": "^3.2.5",
+    "supabase": "^2.53.6",
     "turbo": "^1.12.0",
     "typescript": "^5.3.3"
   },

@@ -49,8 +49,8 @@ flashcards-supa-expo/
 
 ### Prerequisites
 
-- **Node.js** 18+ 
-- **pnpm** 8+ (package manager)
+- **Node.js** 18+
+- **Package Manager**: npm (included with Node.js), pnpm 8+, or bun 1.0+
 - **Supabase CLI** (for database management)
 - **Expo CLI** (for mobile development)
 
@@ -61,8 +61,12 @@ flashcards-supa-expo/
 git clone <repository-url>
 cd flashcards-supa-expo
 
-# Install dependencies
+# Install dependencies (choose one)
+npm install
+# or
 pnpm install
+# or
+bun install
 
 # Set up environment variables
 cp .env.example .env.local
@@ -71,13 +75,23 @@ cp .env.example .env.local
 
 ### Environment Setup
 
-Create `.env.local` in the project root:
+Create `.env.local` in the project root (or copy from `.env.example`):
+
+```bash
+cp .env.example .env.local
+# Then edit .env.local with your actual values
+```
+
+Your `.env.local` should look like this:
 
 ```env
 # Supabase Configuration
 EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+
+# Database Password (required for db:seed script)
+SUPABASE_DB_PASSWORD=your_database_password
 
 # Function Security
 FILE_PROCESSING_WEBHOOK_SECRET=your_webhook_secret
@@ -89,43 +103,117 @@ VISION_PROVIDER=openai
 OPENAI_API_KEY=your_openai_key
 ```
 
+⚠️ **Important**: Never commit `.env.local` to git - it's already in `.gitignore`
+
+#### How to Get Environment Keys
+
+**Supabase Keys** (Required for database and auth):
+1. **`EXPO_PUBLIC_SUPABASE_URL`** and **`EXPO_PUBLIC_SUPABASE_ANON_KEY`**:
+   - Go to your [Supabase Dashboard](https://supabase.com/dashboard)
+   - Select your project
+   - Navigate to **Settings > API**
+   - Copy the **Project URL** and **anon/public** key
+
+2. **`SUPABASE_SERVICE_ROLE_KEY`**:
+   - In the same **Settings > API** page
+   - Copy the **service_role** key (bottom section)
+   - ⚠️ **Important**: This key bypasses Row Level Security - keep it secret and never expose it client-side
+
+3. **`SUPABASE_DB_PASSWORD`** (optional - only if using `db:seed:psql`):
+   - Go to **Settings > Database** in your Supabase dashboard
+   - Find the **Database Password** section
+   - If you don't have it saved, you'll need to reset it
+   - Only needed if you want to seed via direct psql connection
+   - **Recommended**: Use the Supabase dashboard SQL Editor instead (no password needed)
+
+**Function Security Secrets** (Required for background processing):
+
+Generate secure random strings for webhook and worker authentication:
+
+```bash
+# Generate all three secrets at once
+openssl rand -base64 32  # Use for FILE_PROCESSING_WEBHOOK_SECRET
+openssl rand -base64 32  # Use for JOB_WORKER_SECRET
+openssl rand -base64 32  # Use for CRON_SECRET
+```
+
+What each secret is for:
+- **`FILE_PROCESSING_WEBHOOK_SECRET`**: Secures the storage upload webhook
+- **`JOB_WORKER_SECRET`**: Protects the background job worker endpoint
+- **`CRON_SECRET`**: Secures the scheduled task trigger endpoint
+
+**OpenAI API Key** (Optional - for AI features):
+
+1. Go to [OpenAI Platform](https://platform.openai.com/api-keys)
+2. Sign in or create an account
+3. Click **"Create new secret key"**
+4. Copy the key immediately (you won't see it again)
+5. Add to `.env.local` as `OPENAI_API_KEY`
+
+Note: Only required if using AI-powered card generation features
+
+---
+
+**Quick Setup Summary:**
+
+1. Copy `.env.example` to `.env.local`
+2. Get Supabase keys from dashboard (URL, anon key, service role key, database password)
+3. Generate three security secrets with `openssl rand -base64 32`
+4. (Optional) Add OpenAI API key for AI features
+5. Save `.env.local` and proceed with database setup
+
 ### Database Setup
 
 ```bash
-# Initialize Supabase
-supabase init
-
-# Link to your project
-supabase link --project-ref YOUR_PROJECT_REF
+# Link to your Supabase project (if not already done)
+npx supabase link --project-ref YOUR_PROJECT_REF
 
 # Apply migrations
-supabase db push
+npx supabase db push
 
-# Seed initial data
-supabase db seed
+# Seed initial data (optional - adds starter data like subjects, grade levels, tags)
+# This will show you instructions for manual seeding via Supabase dashboard
+npm run db:seed
 
-# Generate TypeScript types
-pnpm gen:types
+# Alternatively, if you have psql installed and configured:
+# npm run db:seed:psql
+
+# Generate TypeScript types from remote database
+npm run gen:types
+# or pnpm gen:types
+# or bun run gen:types
+
+# Note: This generates types at packages/sdk/src/types/database.ts
+# Re-run this command whenever you update your database schema
 ```
 
 ### Development
 
 ```bash
 # Start all services
-pnpm dev
+npm run dev
+# or pnpm dev
+# or bun run dev
 
-# Start specific services
-pnbo dev --filter=mobile
-pnpm dev --filter=functions
+# Start specific services (if using workspaces)
+npm run dev --workspace=mobile
+# or pnpm dev --filter=mobile
+# or bun run dev --filter=mobile
 
 # Build all packages
-pnpm build
+npm run build
+# or pnpm build
+# or bun run build
 
 # Run linting
-pnpm lint
+npm run lint
+# or pnpm lint
+# or bun run lint
 
 # Run type checking
-pnpm typecheck
+npm run typecheck
+# or pnpm typecheck
+# or bun run typecheck
 ```
 
 ## 📱 Mobile App (Expo)
