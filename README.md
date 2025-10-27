@@ -235,10 +235,20 @@ The mobile app is built with Expo and React Native, featuring:
 
 - **Cross-platform** iOS and Android support
 - **Type-safe** Supabase integration
+- **OAuth Authentication** - Google and Apple Sign In
 - **Offline-first** architecture with sync
 - **AI-powered** content generation
 - **Media processing** for images, videos, and PDFs
 - **Quiz functionality** with multiple question types
+
+### Authentication
+
+The app supports multiple authentication methods:
+- **Magic Link** - Email-based passwordless authentication
+- **Google OAuth** - Sign in with Google account
+- **Apple Sign In** - Sign in with Apple ID (iOS only)
+
+To set up OAuth providers, see the [OAuth Setup Guide](docs/OAUTH_SETUP.md).
 
 ### Key Features
 

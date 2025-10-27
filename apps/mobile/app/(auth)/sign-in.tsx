@@ -3,8 +3,9 @@ import { Input } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { View, Text, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, Alert, TouchableOpacity, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function SignInScreen() {
   const [email, setEmail] = useState('');
@@ -35,8 +36,9 @@ export default function SignInScreen() {
     setLoading(true);
     try {
       await signInWithOAuth(provider);
-    } catch (error) {
-      Alert.alert('Error', error.message);
+      // Navigation will happen automatically via the auth state change listener
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to sign in');
     } finally {
       setLoading(false);
     }
@@ -55,6 +57,39 @@ export default function SignInScreen() {
         </View>
 
         <View className="space-y-4">
+          {/* OAuth Buttons - Show first for better UX */}
+          <TouchableOpacity
+            onPress={() => handleOAuthSignIn('google')}
+            disabled={loading}
+            className="flex-row items-center justify-center bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-lg py-3 px-4"
+            style={{ opacity: loading ? 0.5 : 1 }}
+          >
+            <Ionicons name="logo-google" size={20} color="#DB4437" />
+            <Text className="ml-3 text-gray-900 dark:text-white font-semibold">
+              Continue with Google
+            </Text>
+          </TouchableOpacity>
+
+          {Platform.OS === 'ios' && (
+            <TouchableOpacity
+              onPress={() => handleOAuthSignIn('apple')}
+              disabled={loading}
+              className="flex-row items-center justify-center bg-black dark:bg-white rounded-lg py-3 px-4"
+              style={{ opacity: loading ? 0.5 : 1 }}
+            >
+              <Ionicons name="logo-apple" size={20} color={Platform.OS === 'ios' ? 'white' : 'black'} />
+              <Text className="ml-3 text-white dark:text-black font-semibold">
+                Continue with Apple
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          <View className="flex-row items-center my-4">
+            <View className="flex-1 h-px bg-gray-300 dark:bg-gray-600" />
+            <Text className="mx-4 text-gray-500 dark:text-gray-400">or</Text>
+            <View className="flex-1 h-px bg-gray-300 dark:bg-gray-600" />
+          </View>
+
           <Input
             placeholder="Enter your email"
             value={email}
@@ -69,31 +104,8 @@ export default function SignInScreen() {
             loading={loading}
             className="w-full"
           >
-            Send Magic Link
-          </Button>
-
-          <View className="flex-row items-center my-4">
-            <View className="flex-1 h-px bg-gray-300 dark:bg-gray-600" />
-            <Text className="mx-4 text-gray-500 dark:text-gray-400">or</Text>
-            <View className="flex-1 h-px bg-gray-300 dark:bg-gray-600" />
-          </View>
-
-          <Button
-            onPress={() => handleOAuthSignIn('google')}
-            variant="outline"
-            className="w-full"
-            disabled={loading}
-          >
-            Continue with Google
-          </Button>
-
-          <Button
-            onPress={() => handleOAuthSignIn('apple')}
-            variant="outline"
-            className="w-full"
-            disabled={loading}
-          >
-            Continue with Apple
+            <Ionicons name="mail-outline" size={20} color="white" />
+            <Text className="ml-2 text-white font-semibold">Send Magic Link</Text>
           </Button>
         </View>
 

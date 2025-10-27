@@ -15,7 +15,7 @@ interface Deck {
   description: string;
   visibility: string;
   created_at: string;
-  cards_count: number;
+  cards_count?: number;
 }
 
 interface Job {
@@ -35,16 +35,33 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchRecentDecks = async () => {
+    if (!user?.id) {
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('decks')
-        .select('id, title, description, visibility, created_at, cards_count')
-        .eq('owner', user?.id)
+        .select(`
+          id,
+          title,
+          description,
+          visibility,
+          created_at,
+          cards(count)
+        `)
+        .eq('owner', user.id)
         .order('created_at', { ascending: false })
         .limit(5);
 
       if (error) throw error;
-      setDecks(data || []);
+
+      const formattedDecks = data?.map(deck => ({
+        ...deck,
+        cards_count: deck.cards?.[0]?.count || 0,
+      })) || [];
+
+      setDecks(formattedDecks);
     } catch (error) {
       console.error('Error fetching decks:', error);
     }

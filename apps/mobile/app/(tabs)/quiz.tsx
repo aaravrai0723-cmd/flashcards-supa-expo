@@ -13,7 +13,7 @@ interface Deck {
   id: number;
   title: string;
   description: string;
-  cards_count: number;
+  cards_count?: number;
 }
 
 interface QuizQuestion {
@@ -49,16 +49,30 @@ export default function QuizScreen() {
   const [quizStarted, setQuizStarted] = useState(false);
 
   const fetchDecks = async () => {
+    if (!user?.id) {
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('decks')
-        .select('id, title, description, cards_count')
-        .eq('owner', user?.id)
-        .gt('cards_count', 0)
+        .select(`
+          id,
+          title,
+          description,
+          cards(count)
+        `)
+        .eq('owner', user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setDecks(data || []);
+
+      const formattedDecks = data?.map(deck => ({
+        ...deck,
+        cards_count: deck.cards?.[0]?.count || 0,
+      })).filter(deck => deck.cards_count > 0) || [];
+
+      setDecks(formattedDecks);
     } catch (error) {
       console.error('Error fetching decks:', error);
     }
