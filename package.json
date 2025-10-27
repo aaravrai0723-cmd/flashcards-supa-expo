@@ -9,16 +9,18 @@
   ],
   "packageManager": "pnpm@8.15.0",
   "scripts": {
-    "dev": "turbo run dev",
-    "build": "turbo run build",
-    "lint": "turbo run lint",
-    "typecheck": "turbo run typecheck",
+    "dev": "npm run dev --workspace=mobile",
+    "dev:mobile": "npm run start --workspace=mobile",
+    "build": "npm run build --workspace=sdk && npm run build --workspace=mobile",
+    "build:sdk": "npm run build --workspace=sdk",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
     "gen:types": "supabase gen types typescript --linked > packages/sdk/src/types/database.ts",
     "gen:types:local": "supabase gen types typescript --local > packages/sdk/src/types/database.ts",
     "db:push": "supabase db push",
     "db:seed": "./scripts/seed-manual-instructions.sh",
     "db:seed:psql": "./scripts/seed-remote-simple.sh",
-    "clean": "turbo run clean && rm -rf node_modules",
+    "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/dist packages/*/dist",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\""
   },
@@ -28,7 +30,6 @@
     "eslint": "^8.56.0",
     "prettier": "^3.2.5",
     "supabase": "^2.53.6",
-    "turbo": "^1.12.0",
     "typescript": "^5.3.3"
   },
   "engines": {

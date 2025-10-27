@@ -35,15 +35,27 @@ flashcards-supa-expo/
 │       ├── health/             # Health monitoring
 │       └── monitoring/          # Metrics and alerts
 ├── packages/
-│   ├── sdk/                    # Type-safe Supabase client
-│   └── ui/                     # Shared UI components
-├── db/
+│   └── sdk/                    # Type-safe Supabase SDK
+│       ├── src/
+│       │   ├── client.ts       # Supabase client setup
+│       │   ├── repos/          # Data repositories
+│       │   └── types/          # Generated TypeScript types
+│       ├── package.json
+│       └── tsconfig.json
+├── supabase/
 │   ├── migrations/             # SQL migrations
-│   └── seeds/                  # Seed data
-├── infra/
-│   └── supabase/               # Supabase configuration
+│   ├── seed.sql                # Seed data
+│   └── config.toml             # Supabase configuration
+├── scripts/                    # Utility scripts
 └── docs/                       # Documentation
 ```
+
+### Architecture
+
+This is a **workspace monorepo** using npm/pnpm workspaces:
+- **Mobile app** imports shared SDK for type-safe database access
+- **Edge functions** can also import SDK for consistency
+- **SDK package** is built with TypeScript and shared across apps
 
 ## 🚀 Quick Start
 
@@ -190,27 +202,28 @@ npm run gen:types
 ### Development
 
 ```bash
-# Start all services
+# Start mobile app
 npm run dev
+# or npm run dev:mobile
 # or pnpm dev
 # or bun run dev
 
-# Start specific services (if using workspaces)
-npm run dev --workspace=mobile
-# or pnpm dev --filter=mobile
-# or bun run dev --filter=mobile
+# Build SDK package (for Edge Functions or manual builds)
+npm run build:sdk
+# or pnpm build:sdk
+# or bun run build:sdk
 
-# Build all packages
+# Build everything
 npm run build
 # or pnpm build
 # or bun run build
 
-# Run linting
+# Run linting across all workspaces
 npm run lint
 # or pnpm lint
 # or bun run lint
 
-# Run type checking
+# Run type checking across all workspaces
 npm run typecheck
 # or pnpm typecheck
 # or bun run typecheck
@@ -318,7 +331,16 @@ supabase functions logs ingest-webhook
 
 ## 🔧 SDK Package
 
-Type-safe Supabase client with repository pattern:
+The SDK package provides a type-safe Supabase client with repository pattern for data access. It's shared between the mobile app and edge functions.
+
+### Features
+
+- **Type-safe database access** - Generated TypeScript types from your schema
+- **Repository pattern** - Clean abstractions for data operations
+- **Supabase client** - Pre-configured with auth and realtime
+- **Shared logic** - Used by both mobile app and edge functions
+
+### Usage in Mobile App
 
 ```typescript
 import { decksRepo, cardsRepo, mediaRepo, jobsRepo } from '@flashcards/sdk';
@@ -341,6 +363,16 @@ const card = await cardsRepo.createCard({
   answer_text: 'The process by which plants convert light into energy'
 });
 ```
+
+### Building the SDK
+
+The SDK is automatically built when needed, but you can build it manually:
+
+```bash
+npm run build:sdk
+```
+
+This generates the `dist/` folder with compiled JavaScript and TypeScript declarations.
 
 ## 📊 Monitoring & Observability
 
