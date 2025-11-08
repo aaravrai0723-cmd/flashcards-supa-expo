@@ -1,0 +1,22 @@
+{
+  "name": "@flashcards/sdk",
+  "version": "1.0.0",
+  "description": "Type-safe Supabase SDK for Flashcards app",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "files": [
+    "dist"
+  ],
+  "private": true
+}

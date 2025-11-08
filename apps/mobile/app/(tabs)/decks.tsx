@@ -15,9 +15,9 @@ interface Deck {
   description: string;
   visibility: string;
   created_at: string;
-  cards_count: number;
+  cards_count?: number;
   subjects: string[];
-  grade_bands: string[];
+  grade_levels: string[];
 }
 
 export default function DecksScreen() {
@@ -28,6 +28,10 @@ export default function DecksScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchDecks = async () => {
+    if (!user?.id) {
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('decks')
@@ -37,21 +41,22 @@ export default function DecksScreen() {
           description,
           visibility,
           created_at,
-          cards_count,
+          cards(count),
           subjects:deck_subjects(subject:subjects(name)),
-          grade_bands:deck_grade_bands(grade_band:grade_levels(name))
+          grade_levels:deck_grade_levels(grade_level:grade_levels(label))
         `)
-        .eq('owner', user?.id)
+        .eq('owner', user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      
+
       const formattedDecks = data?.map(deck => ({
         ...deck,
+        cards_count: deck.cards?.[0]?.count || 0,
         subjects: deck.subjects?.map((s: any) => s.subject.name) || [],
-        grade_bands: deck.grade_bands?.map((g: any) => g.grade_band.name) || [],
+        grade_levels: deck.grade_levels?.map((g: any) => g.grade_level.label) || [],
       })) || [];
-      
+
       setDecks(formattedDecks);
     } catch (error) {
       console.error('Error fetching decks:', error);
@@ -148,7 +153,7 @@ export default function DecksScreen() {
                           {deck.visibility}
                         </Tag>
                         <Text className="text-gray-500 dark:text-gray-400 text-sm">
-                          {deck.cards_count} cards
+                          {deck.cards_count || 0} cards
                         </Text>
                       </View>
                     </View>
