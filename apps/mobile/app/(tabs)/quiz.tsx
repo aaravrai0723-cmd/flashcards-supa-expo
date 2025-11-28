@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useSupabase } from '@/hooks/useSupabase';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, Modal } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Alert, Modal, TextInput, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -84,31 +84,22 @@ export default function QuizScreen() {
       // Fetch random cards from the deck
       const { data: cards, error } = await supabase
         .from('cards')
-        .select(`
-          id,
-          question,
-          answer,
-          type,
-          explanation,
-          media_url,
-          hotspot_data
-        `)
+        .select('id, prompt_text, answer_text')
         .eq('deck_id', deck.id)
         .order('random()')
         .limit(10);
 
       if (error) throw error;
+      if (!cards || cards.length === 0) {
+        throw new Error('No cards available in this deck yet.');
+      }
 
       // Convert cards to quiz questions
       const quizQuestions: QuizQuestion[] = cards.map(card => ({
         id: card.id,
-        type: card.type as 'mcq' | 'tf' | 'short' | 'hotspot',
-        question: card.question,
-        options: card.type === 'mcq' ? JSON.parse(card.answer).options : undefined,
-        correct_answer: card.type === 'mcq' ? JSON.parse(card.answer).correct : card.answer,
-        explanation: card.explanation,
-        media_url: card.media_url,
-        hotspot_data: card.hotspot_data,
+        type: 'short',
+        question: card.prompt_text,
+        correct_answer: card.answer_text || '',
       }));
 
       setQuestions(quizQuestions);

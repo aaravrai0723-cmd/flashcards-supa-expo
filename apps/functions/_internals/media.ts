@@ -74,16 +74,17 @@ export interface PDFProcessingResult {
 // Image Processing Functions
 export async function processImage(
   storagePath: string,
-  options: ImageProcessingOptions = {}
+  options: ImageProcessingOptions = {},
+  bucket: string = 'ingest'
 ): Promise<ImageProcessingResult> {
   try {
-    log('info', 'Processing image', { storagePath, options });
-    
+    log('info', 'Processing image', { storagePath, bucket, options });
+
     const supabase = createServiceRoleClient();
     const aiClient = createAIClient();
-    
+
     // Get original image URL
-    const originalUrl = await getMediaAssetUrl(storagePath, 'media');
+    const originalUrl = await getMediaAssetUrl(storagePath, bucket);
     
     // TODO: Implement image processing pipeline
     // For now, we'll use a placeholder service or basic processing
@@ -112,16 +113,17 @@ export async function processImage(
 // Video Processing Functions
 export async function processVideo(
   storagePath: string,
-  options: VideoProcessingOptions = {}
+  options: VideoProcessingOptions = {},
+  bucket: string = 'ingest'
 ): Promise<VideoProcessingResult> {
   try {
-    log('info', 'Processing video', { storagePath, options });
-    
+    log('info', 'Processing video', { storagePath, bucket, options });
+
     const supabase = createServiceRoleClient();
     const aiClient = createAIClient();
-    
+
     // Get original video URL
-    const originalUrl = await getMediaAssetUrl(storagePath, 'media');
+    const originalUrl = await getMediaAssetUrl(storagePath, bucket);
     
     // TODO: Implement video processing pipeline
     // Extract keyframes using external service
@@ -178,15 +180,16 @@ export async function processVideo(
 // PDF Processing Functions
 export async function processPDF(
   storagePath: string,
-  options: PDFProcessingOptions = {}
+  options: PDFProcessingOptions = {},
+  bucket: string = 'ingest'
 ): Promise<PDFProcessingResult> {
   try {
-    log('info', 'Processing PDF', { storagePath, options });
-    
+    log('info', 'Processing PDF', { storagePath, bucket, options });
+
     const supabase = createServiceRoleClient();
-    
+
     // Get original PDF URL
-    const originalUrl = await getMediaAssetUrl(storagePath, 'media');
+    const originalUrl = await getMediaAssetUrl(storagePath, bucket);
     
     // TODO: Implement PDF processing pipeline
     // Extract pages as images

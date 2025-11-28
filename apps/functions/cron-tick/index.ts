@@ -11,11 +11,11 @@ import {
 // Cron tick endpoint for triggering job processing
 serve(async (req) => {
   try {
-    // Verify cron secret (optional - can be called by pg_cron or external scheduler)
+    // Verify cron secret from custom header
     const cronSecret = Deno.env.get('CRON_SECRET');
     if (cronSecret) {
-      const authHeader = req.headers.get('authorization');
-      if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
+      const providedSecret = req.headers.get('x-cron-secret');
+      if (!providedSecret || providedSecret !== cronSecret) {
         log('error', 'Invalid cron authentication');
         return createErrorResponse('Unauthorized', 401);
       }
@@ -81,7 +81,7 @@ async function callWorkerPull(): Promise<any> {
     const response = await fetch(workerUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${workerSecret}`,
+        'x-worker-secret': workerSecret,
         'Content-Type': 'application/json'
       }
     });

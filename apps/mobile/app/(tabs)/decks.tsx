@@ -1,10 +1,11 @@
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Tag } from '@/components/ui/Tag';
+import { CreateDeckModal } from '@/components/CreateDeckModal';
 import { useAuth } from '@/hooks/useAuth';
 import { useSupabase } from '@/hooks/useSupabase';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,17 +22,21 @@ interface Deck {
 }
 
 export default function DecksScreen() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { supabase } = useSupabase();
   const [decks, setDecks] = useState<Deck[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingDecks, setLoadingDecks] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
 
-  const fetchDecks = async () => {
+  const fetchDecks = useCallback(async () => {
     if (!user?.id) {
+      setDecks([]);
+      setLoadingDecks(false);
       return;
     }
 
+    setLoadingDecks(true);
     try {
       const { data, error } = await supabase
         .from('decks')
@@ -61,8 +66,10 @@ export default function DecksScreen() {
     } catch (error) {
       console.error('Error fetching decks:', error);
       Alert.alert('Error', 'Failed to load decks');
+    } finally {
+      setLoadingDecks(false);
     }
-  };
+  }, [supabase, user?.id]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -71,28 +78,23 @@ export default function DecksScreen() {
   };
 
   const handleCreateDeck = () => {
-    // Navigate to create deck modal or screen
-    Alert.alert(
-      'Create Deck',
-      'This would open a modal to create a new deck',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Create', onPress: () => {
-          // TODO: Implement deck creation
-          console.log('Create deck');
-        }}
-      ]
-    );
+    setCreateModalVisible(true);
+  };
+
+  const handleDeckCreated = async () => {
+    await fetchDecks();
   };
 
   const handleDeckPress = (deck: Deck) => {
-    // Navigate to deck detail
-    console.log('Deck pressed:', deck);
+    router.push(`/decks/${deck.id}`);
   };
 
   useEffect(() => {
-    fetchDecks().finally(() => setLoading(false));
-  }, []);
+    if (authLoading) {
+      return;
+    }
+    fetchDecks();
+  }, [authLoading, fetchDecks]);
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50 dark:bg-gray-900">
@@ -107,13 +109,19 @@ export default function DecksScreen() {
           </Button>
         </View>
 
+        <CreateDeckModal
+          visible={createModalVisible}
+          onClose={() => setCreateModalVisible(false)}
+          onDeckCreated={handleDeckCreated}
+        />
+
         <ScrollView
           className="flex-1 px-6"
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
         >
-          {loading ? (
+          {loadingDecks ? (
             <View className="space-y-4">
               {[1, 2, 3].map((i) => (
                 <Card key={i} className="p-4">
