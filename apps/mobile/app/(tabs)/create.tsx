@@ -7,6 +7,7 @@ import { useRealtimeJobs } from '@/hooks/useRealtimeJobs';
 import { getFileMimeType, isImageFile, isVideoFile, isPdfFile, createStoragePath } from '@/utils/media';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useState } from 'react';
 import { View, Text, ScrollView, Alert, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,17 +22,39 @@ interface UploadedFile {
 }
 
 export default function CreateScreen() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const { supabase } = useSupabase();
   const { getProcessingJobs } = useRealtimeJobs();
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [processingJobs, setProcessingJobs] = useState<any[]>([]);
 
+  // Show auth required screen if not logged in
+  if (!loading && !user) {
+    return (
+      <SafeAreaView className="flex-1 bg-gray-50 dark:bg-gray-900">
+        <View className="flex-1 items-center justify-center px-6">
+          <Ionicons name="lock-closed-outline" size={64} color="#6b7280" />
+          <Text className="text-2xl font-bold text-gray-900 dark:text-white mt-6 text-center">
+            Sign In Required
+          </Text>
+          <Text className="text-gray-600 dark:text-gray-400 mt-3 text-center">
+            You need to sign in to upload media and create flashcards
+          </Text>
+          <View className="mt-8 w-full max-w-sm">
+            <Text className="text-sm text-gray-500 dark:text-gray-400 text-center">
+              Please restart the app or navigate to sign in
+            </Text>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   const pickImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'] as ImagePicker.MediaType[],
         allowsMultipleSelection: true,
         quality: 0.8,
       });
@@ -55,7 +78,7 @@ export default function CreateScreen() {
   const pickVideo = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        mediaTypes: ['videos'] as ImagePicker.MediaType[],
         allowsMultipleSelection: true,
         quality: 0.8,
       });
@@ -102,60 +125,49 @@ export default function CreateScreen() {
 
   const uploadFile = async (file: UploadedFile) => {
     try {
-      const storagePath = createStoragePath(user?.id || '', file.name);
-      
+      if (!user?.id) {
+        throw new Error('User not authenticated. Please sign in and try again.');
+      }
+
+      const storagePath = createStoragePath(user.id, file.name);
+      console.log('Uploading file:', { userId: user.id, storagePath, mimeType: file.mimeType });
+
+      // Verify auth session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw new Error('Authentication session invalid. Please sign in again.');
+      }
+      console.log('Auth session valid:', { userId: session.user.id });
+
+      // Read file from local URI as base64
+      const base64 = await FileSystem.readAsStringAsync(file.uri, {
+        encoding: 'base64',
+      });
+
+      // Convert base64 to binary for upload
+      const binaryString = atob(base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+
       // Upload to Supabase Storage
+      // The storage trigger will automatically create the ingest_file record and job
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('ingest')
-        .upload(storagePath, {
-          uri: file.uri,
-          type: file.mimeType,
-          name: file.name,
-        } as any);
+        .upload(storagePath, bytes.buffer, {
+          contentType: file.mimeType,
+          upsert: false,
+        });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Storage upload error details:', uploadError);
+        throw uploadError;
+      }
+      console.log('Upload successful - processing will start automatically:', uploadData);
 
-      // Create ingest file record
-      const { data: ingestFile, error: ingestError } = await supabase
-        .from('ingest_files')
-        .insert({
-          storage_path: storagePath,
-          mime_type: file.mimeType,
-          meta: {
-            original_name: file.name,
-            file_size: file.size,
-            uploaded_at: new Date().toISOString(),
-          },
-        })
-        .select()
-        .single();
-
-      if (ingestError) throw ingestError;
-
-      // Enqueue processing job
-      const { data: job, error: jobError } = await supabase
-        .from('jobs')
-        .insert({
-          type: isImageFile(file.mimeType) ? 'ingest_image' : 
-                isVideoFile(file.mimeType) ? 'ingest_video' : 
-                isPdfFile(file.mimeType) ? 'ingest_pdf' : 'ingest_file',
-          status: 'queued',
-          input: {
-            ingest_file_id: ingestFile.id,
-            storage_path: storagePath,
-            mime_type: file.mimeType,
-            meta: {
-              original_name: file.name,
-              file_size: file.size,
-            },
-          },
-        })
-        .select()
-        .single();
-
-      if (jobError) throw jobError;
-
-      return { job, ingestFile };
+      // Note: The database trigger handles creating ingest_files and jobs records automatically
+      return { uploadData };
     } catch (error) {
       console.error('Upload error:', error);
       throw error;

@@ -298,7 +298,7 @@ EXPO_PUBLIC_API_URL=https://your-project.supabase.co/functions/v1
 - **React Native Safe Area Context**: Safe area handling
 
 ### **Backend Integration**
-- **Supabase**: Backend as a Service
+- **@supabase/supabase-js** (v2.86.0+): Backend as a Service client - v2.86.0+ required for proper storage owner type handling
 - **Expo Document Picker**: File selection
 - **Expo Image Picker**: Image selection
 - **Expo Web Browser**: OAuth handling
@@ -388,6 +388,7 @@ npx expo upload:android
 3. **Android build failures**: Verify Android Studio and SDK setup
 4. **Dependency conflicts**: Use `npm ls` to check for conflicts
 5. **NativeWind issues**: Check babel and metro configuration
+6. **Storage upload owner type error**: If file uploads fail with "column owner is of type uuid but expression is of type text", ensure you're using `@supabase/supabase-js` v2.86.0 or later. Run `npm install @supabase/supabase-js@latest` and restart the dev server
 
 ### **Getting Help**
 - Check the [Expo troubleshooting guide](https://docs.expo.dev/troubleshooting/)

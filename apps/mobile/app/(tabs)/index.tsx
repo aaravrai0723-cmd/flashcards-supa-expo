@@ -1,11 +1,12 @@
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { CreateDeckModal } from '@/components/CreateDeckModal';
 import { useAuth } from '@/hooks/useAuth';
 import { useRealtimeJobs } from '@/hooks/useRealtimeJobs';
 import { useSupabase } from '@/hooks/useSupabase';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, RefreshControl } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -26,19 +27,23 @@ interface Job {
 }
 
 export default function HomeScreen() {
-  const { user } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
   const { supabase } = useSupabase();
   const { jobs } = useRealtimeJobs();
-  
-  const [decks, setDecks] = useState<Deck[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
-  const fetchRecentDecks = async () => {
+  const [decks, setDecks] = useState<Deck[]>([]);
+  const [loadingDecks, setLoadingDecks] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+
+  const fetchRecentDecks = useCallback(async () => {
     if (!user?.id) {
+      setDecks([]);
+      setLoadingDecks(false);
       return;
     }
 
+    setLoadingDecks(true);
     try {
       const { data, error } = await supabase
         .from('decks')
@@ -64,8 +69,10 @@ export default function HomeScreen() {
       setDecks(formattedDecks);
     } catch (error) {
       console.error('Error fetching decks:', error);
+    } finally {
+      setLoadingDecks(false);
     }
-  };
+  }, [supabase, user?.id]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -74,13 +81,25 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
-    fetchRecentDecks().finally(() => setLoading(false));
-  }, []);
+    if (authLoading) {
+      return;
+    }
+    fetchRecentDecks();
+  }, [authLoading, fetchRecentDecks]);
+
+  const handleDeckCreated = async () => {
+    await fetchRecentDecks();
+  };
 
   const recentJobs = jobs?.slice(0, 3) || [];
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50 dark:bg-gray-900">
+      <CreateDeckModal
+        visible={createModalVisible}
+        onClose={() => setCreateModalVisible(false)}
+        onDeckCreated={handleDeckCreated}
+      />
       <ScrollView
         className="flex-1"
         refreshControl={
@@ -88,9 +107,33 @@ export default function HomeScreen() {
         }
       >
         <View className="p-6">
+          {/* Auth Debug Panel */}
+          <View className="p-4 mb-6 bg-yellow-50 dark:bg-yellow-900/20 border-2 border-yellow-200 dark:border-yellow-700 rounded-lg">
+            <View className="flex-row items-center justify-between mb-2">
+              <Text className="text-sm font-semibold text-yellow-900 dark:text-yellow-100">
+                Auth Debug Info
+              </Text>
+              <TouchableOpacity
+                onPress={async () => {
+                  console.log('Sign out clicked');
+                  await signOut();
+                }}
+                className="bg-red-100 dark:bg-red-900 py-2 px-4 rounded"
+              >
+                <Text className="text-xs text-red-600 dark:text-red-200 font-semibold">Sign Out</Text>
+              </TouchableOpacity>
+            </View>
+            <Text className="text-xs text-yellow-800 dark:text-yellow-200 mb-1">
+              User ID: {user?.id || 'Not authenticated'}
+            </Text>
+            <Text className="text-xs text-yellow-800 dark:text-yellow-200">
+              Email: {user?.email || 'No email'}
+            </Text>
+          </View>
+
           <View className="mb-6">
             <Text className="text-2xl font-bold text-gray-900 dark:text-white">
-              Welcome back, {user?.email?.split('@')[0]}!
+              Welcome back{user?.email ? `, ${user.email.split('@')[0]}` : ''}!
             </Text>
             <Text className="text-gray-600 dark:text-gray-400 mt-1">
               Ready to learn something new?
@@ -144,7 +187,7 @@ export default function HomeScreen() {
               </Button>
             </View>
             
-            {loading ? (
+            {loadingDecks ? (
               <View className="space-y-3">
                 {[1, 2, 3].map((i) => (
                   <Card key={i} className="p-4">
@@ -158,36 +201,41 @@ export default function HomeScreen() {
             ) : decks.length > 0 ? (
               <View className="space-y-3">
                 {decks.map((deck) => (
-                  <Card key={deck.id} className="p-4">
-                    <View className="flex-row justify-between items-start">
-                      <View className="flex-1">
-                        <Text className="font-semibold text-gray-900 dark:text-white">
-                          {deck.title}
-                        </Text>
-                        <Text className="text-gray-600 dark:text-gray-400 text-sm mt-1">
-                          {deck.description}
-                        </Text>
-                        <View className="flex-row items-center mt-2">
-                          <View className={`px-2 py-1 rounded-full ${
-                            deck.visibility === 'public' 
-                              ? 'bg-green-100 dark:bg-green-900' 
-                              : 'bg-gray-100 dark:bg-gray-800'
-                          }`}>
-                            <Text className={`text-xs ${
-                              deck.visibility === 'public'
-                                ? 'text-green-800 dark:text-green-200'
-                                : 'text-gray-800 dark:text-gray-200'
+                  <TouchableOpacity
+                    key={deck.id}
+                    onPress={() => router.push(`/decks/${deck.id}`)}
+                  >
+                    <Card className="p-4">
+                      <View className="flex-row justify-between items-start">
+                        <View className="flex-1">
+                          <Text className="font-semibold text-gray-900 dark:text-white">
+                            {deck.title}
+                          </Text>
+                          <Text className="text-gray-600 dark:text-gray-400 text-sm mt-1">
+                            {deck.description}
+                          </Text>
+                          <View className="flex-row items-center mt-2">
+                            <View className={`px-2 py-1 rounded-full ${
+                              deck.visibility === 'public' 
+                                ? 'bg-green-100 dark:bg-green-900' 
+                                : 'bg-gray-100 dark:bg-gray-800'
                             }`}>
-                              {deck.visibility}
+                              <Text className={`text-xs ${
+                                deck.visibility === 'public'
+                                  ? 'text-green-800 dark:text-green-200'
+                                  : 'text-gray-800 dark:text-gray-200'
+                              }`}>
+                                {deck.visibility}
+                              </Text>
+                            </View>
+                            <Text className="text-gray-500 dark:text-gray-400 text-xs ml-2">
+                              {deck.cards_count} cards
                             </Text>
                           </View>
-                          <Text className="text-gray-500 dark:text-gray-400 text-xs ml-2">
-                            {deck.cards_count} cards
-                          </Text>
                         </View>
                       </View>
-                    </View>
-                  </Card>
+                    </Card>
+                  </TouchableOpacity>
                 ))}
               </View>
             ) : (
@@ -197,7 +245,7 @@ export default function HomeScreen() {
                   No decks yet. Create your first deck!
                 </Text>
                 <Button
-                  onPress={() => router.push('/(tabs)/decks')}
+                  onPress={() => setCreateModalVisible(true)}
                   className="mt-4"
                   variant="outline"
                 >

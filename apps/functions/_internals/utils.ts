@@ -1,12 +1,12 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { Database } from '../../../packages/sdk/src/types/database.ts';
+import { Database } from './database.ts';
 
 // HMAC verification utility for webhooks
-export function verifyWebhookSignature(
+export async function verifyWebhookSignature(
   payload: string,
   signature: string,
   secret: string
-): boolean {
+): Promise<boolean> {
   try {
     // Parse the signature header (format: "sha256=...")
     const [algorithm, hash] = signature.split('=');
@@ -266,3 +266,42 @@ export const JOB_TYPES = {
   INGEST_PDF: 'ingest_pdf',
   AI_GENERATE_CARDS: 'ai_generate_cards'
 } as const;
+
+// Utility function to get media asset URL
+export async function getMediaAssetUrl(storagePath: string, bucket: string = 'media'): Promise<string> {
+  const supabase = createServiceRoleClient();
+
+  // Get signed URL for the media asset
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .createSignedUrl(storagePath, 3600); // 1 hour expiry
+
+  if (error) {
+    throw new Error(`Failed to get signed URL: ${error.message}`);
+  }
+
+  return data.signedUrl;
+}
+
+// Utility function to store derived media asset
+export async function storeDerivedAsset(
+  file: Blob,
+  filename: string,
+  metadata: any = {}
+): Promise<string> {
+  const supabase = createServiceRoleClient();
+
+  // Upload to derived bucket
+  const { data, error } = await supabase.storage
+    .from('derived')
+    .upload(filename, file, {
+      contentType: file.type,
+      metadata
+    });
+
+  if (error) {
+    throw new Error(`Failed to store derived asset: ${error.message}`);
+  }
+
+  return data.path;
+}

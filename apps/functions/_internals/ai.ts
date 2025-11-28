@@ -1,5 +1,4 @@
-import { createServiceRoleClient } from './utils.ts';
-import { log } from './utils.ts';
+import { createServiceRoleClient, log, getMediaAssetUrl, storeDerivedAsset } from './utils.ts';
 
 // AI Provider Configuration
 export interface AIProvider {
@@ -83,7 +82,7 @@ class OpenAIClient implements AIClient {
       // TODO: Implement OpenAI Vision API call
       log('info', 'OpenAI describeImage called', { imageUrl });
       
-      // Placeholder implementation
+      // Call OpenAI Vision API using gpt-4o (supports vision)
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
@@ -91,7 +90,7 @@ class OpenAIClient implements AIClient {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4-vision-preview',
+          model: 'gpt-4o',
           messages: [
             {
               role: 'user',
@@ -362,41 +361,3 @@ export function createAIClient(): AIClient {
   }
 }
 
-// Utility function to get media asset URL
-export async function getMediaAssetUrl(storagePath: string, bucket: string = 'media'): Promise<string> {
-  const supabase = createServiceRoleClient();
-  
-  // Get signed URL for the media asset
-  const { data, error } = await supabase.storage
-    .from(bucket)
-    .createSignedUrl(storagePath, 3600); // 1 hour expiry
-  
-  if (error) {
-    throw new Error(`Failed to get signed URL: ${error.message}`);
-  }
-  
-  return data.signedUrl;
-}
-
-// Utility function to store derived media asset
-export async function storeDerivedAsset(
-  file: Blob,
-  filename: string,
-  metadata: any = {}
-): Promise<string> {
-  const supabase = createServiceRoleClient();
-  
-  // Upload to derived bucket
-  const { data, error } = await supabase.storage
-    .from('derived')
-    .upload(filename, file, {
-      contentType: file.type,
-      metadata
-    });
-  
-  if (error) {
-    throw new Error(`Failed to store derived asset: ${error.message}`);
-  }
-  
-  return data.path;
-}
