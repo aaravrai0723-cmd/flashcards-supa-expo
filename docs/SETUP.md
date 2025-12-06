@@ -347,7 +347,7 @@ Set up automatic job creation when files are uploaded using a database trigger:
 
 1. Go to your [Supabase SQL Editor](https://supabase.com/dashboard)
 2. Select your project → **SQL Editor** → **New query**
-3. Open the file `supabase/setup-storage-trigger.sql` in your code editor
+3. Open the file `supabase/scripts/setup-storage-trigger.sql` in your code editor
 4. Copy the entire contents
 5. Paste into the SQL Editor
 6. Click **Run** or press Cmd+Enter (no placeholders to replace!)
@@ -447,10 +447,16 @@ Without the storage trigger:
    - Navigate to **SQL Editor** (left sidebar)
 
 2. **Run the Trigger SQL**:
-   - Open the file `supabase/setup-storage-trigger.sql` in your code editor
+   - Open the file `supabase/scripts/setup-storage-trigger.sql` in your code editor
    - Copy the entire contents
    - Paste into the SQL Editor
    - Click **Run** (or press Cmd+Enter / Ctrl+Enter)
+
+   **Alternative - Use runner script**:
+   ```bash
+   cd supabase/scripts
+   ./run-setup.sh --storage
+   ```
 
 3. **Verify the Trigger Was Created**:
    ```sql
@@ -1048,7 +1054,8 @@ LIMIT 1;
 
 2. **Recreate storage trigger**:
    - Go to Supabase Dashboard > SQL Editor
-   - Copy and run `supabase/setup-storage-trigger.sql`
+   - Copy and run `supabase/scripts/setup-storage-trigger.sql`
+   - Or use the runner script: `cd supabase/scripts && ./run-setup.sh --storage`
 
 3. **Verify OpenAI model**:
    - Check `apps/functions/_internals/ai.ts` line 93

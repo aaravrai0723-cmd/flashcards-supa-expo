@@ -153,12 +153,17 @@ export default function CreateScreen() {
 
       // Upload to Supabase Storage
       // The storage trigger will automatically create the ingest_file record and job
+      // Using ArrayBuffer instead of buffer to avoid potential type issues
+      const arrayBuffer = bytes.buffer;
+
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('ingest')
-        .upload(storagePath, bytes.buffer, {
+        .upload(storagePath, arrayBuffer, {
           contentType: file.mimeType,
           upsert: false,
-        });
+          // Explicitly set duplex for Request compatibility
+          duplex: 'half',
+        } as any);
 
       if (uploadError) {
         console.error('Storage upload error details:', uploadError);

@@ -1,6 +1,6 @@
 {
   "imports": {
     "@/types/": "../../../packages/sdk/src/types/",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.3"
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.86.0"
   }
 }

@@ -65,7 +65,7 @@ The image processing job pipeline was experiencing 503 errors and BOOT_ERROR fai
 
 **Fix**: Updated trigger SQL to use correct snake_case field names
 
-**File Changed**: `supabase/setup-storage-trigger.sql` (lines 46-81)
+**File Changed**: `supabase/scripts/setup-storage-trigger.sql` (lines 46-81)
 
 ### 5. Deprecated OpenAI Model
 
@@ -92,7 +92,7 @@ The image processing job pipeline was experiencing 503 errors and BOOT_ERROR fai
 **Fix**: Updated trigger to extract user ID from the file path instead of relying on `NEW.owner`. Files are uploaded with paths like `{user_id}/filename.jpg`, so we use `storage.foldername()` to extract the first folder.
 
 **Files Changed**:
-- `supabase/setup-storage-trigger.sql` (line 35) - Extract user_id from path
+- `supabase/scripts/setup-storage-trigger.sql` (line 35) - Extract user_id from path
 - `apps/mobile/app/(tabs)/create.tsx` (lines 154-170) - Simplified to remove duplicate job creation
 
 **Why This Works**:
@@ -185,8 +185,9 @@ Use this checklist when setting up the project:
 - [ ] Set Supabase secrets: `./scripts/setup-supabase-secrets.sh`
 - [ ] Deploy functions: `npx supabase functions deploy`
 - [ ] **Run storage trigger SQL** in Supabase Dashboard SQL Editor
-  - Copy contents of `supabase/setup-storage-trigger.sql`
+  - Copy contents of `supabase/scripts/setup-storage-trigger.sql`
   - Paste and run in SQL Editor
+  - Or use runner script: `cd supabase/scripts && ./run-setup.sh --storage`
 - [ ] Verify trigger created (see SQL query above)
 - [ ] Set up pg_cron for automated processing (optional but recommended)
 - [ ] Test worker: `./scripts/trigger-worker.sh` returns HTTP 200
@@ -218,7 +219,7 @@ WHERE trigger_name = 'on_storage_object_created';
 ```
 
 **Fix**:
-1. If no results, run `supabase/setup-storage-trigger.sql`
+1. If no results, run `supabase/scripts/setup-storage-trigger.sql` or use `./run-setup.sh --storage`
 2. Set up pg_cron for automated processing
 3. Or manually process: `./scripts/trigger-worker.sh`
 
@@ -280,7 +281,7 @@ export SUPABASE_SERVICE_ROLE_KEY='your_key'
 | `apps/functions/_internals/ai.ts` | Updated OpenAI model, removed duplicates | 1, 93 |
 | `apps/functions/_internals/media.ts` | Updated bucket parameter | 75, 114, 181 |
 | `apps/functions/worker-pull/index.ts` | Added owner fallback logic | 152, 207, 266 |
-| `supabase/setup-storage-trigger.sql` | Fixed field names, added ingest_files | 46-81 |
+| `supabase/scripts/setup-storage-trigger.sql` | Fixed field names, added ingest_files | 46-81 |
 
 ### Dependencies
 

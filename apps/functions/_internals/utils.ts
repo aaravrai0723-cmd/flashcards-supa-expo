@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.86.0';
 import { Database } from './database.ts';
 
 // HMAC verification utility for webhooks
