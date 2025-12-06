@@ -39,6 +39,21 @@ cd supabase/scripts
 ./run-all-setup.sh
 ```
 
+You can also run custom SQL against your local/remote Supabase:
+
+```bash
+# Run a SQL file
+./run-all-setup.sh --sql-file ./path/to/file.sql
+
+# Run an inline statement
+./run-all-setup.sh --sql "select now();"
+```
+
+### Local vs Remote
+- **Local**: Run `supabase start` in the repo root. Uses Docker, no network needed, fast and safe for experimentation.
+- **Remote**: Uses your hosted Supabase project. Requires `.env.local` with `EXPO_PUBLIC_SUPABASE_URL` and `SUPABASE_DB_PASSWORD`, plus working network/DNS. Changes affect your live data.
+- The scripts auto-prefer local if it is running; if remote fails to resolve/authenticate, start local or fix connectivity before rerunning.
+
 ### Flexible Setup (run-setup.sh)
 Run specific scripts as needed:
 

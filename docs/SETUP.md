@@ -285,6 +285,15 @@ This creates type definitions at `packages/sdk/src/types/database.ts`.
 
 ---
 
+## Local Supabase (Development)
+
+- **Start services**: `supabase start` (runs Docker locally; does not create a new Supabase project)
+- **Apply schema locally**: `npm run db:push`
+- **Seed sample data (optional)**: `npm run db:seed`
+- Scripts and setup tools auto-prefer the local instance when it is running; otherwise they use the remote project defined in `.env.local`.
+
+---
+
 ## Edge Functions Deployment
 
 Edge Functions handle background processing (AI analysis, card generation, etc.).
@@ -698,6 +707,15 @@ If you want to enable Google and Apple authentication, follow the detailed guide
 ---
 
 ## Mobile App Development
+
+### 0. Prepare Mobile Environment
+
+From the repo root, copy the example env so Expo can read values when you run inside `apps/mobile`:
+
+```bash
+cp .env.example .env.local
+cp .env.example apps/mobile/.env
+```
 
 ### 1. Install Expo Go (Optional)
 

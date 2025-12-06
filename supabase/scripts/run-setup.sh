@@ -56,8 +56,9 @@ get_db_connection() {
         # Extract project ref from URL
         PROJECT_REF=$(echo $EXPO_PUBLIC_SUPABASE_URL | sed -n 's/.*\/\/\([^.]*\).*/\1/p')
 
-        # Use remote connection
-        PSQL_CMD="PGPASSWORD='$SUPABASE_DB_PASSWORD' psql -h aws-0-us-east-1.pooler.supabase.com -p 5432 -U postgres.$PROJECT_REF -d postgres"
+        # Use remote connection with correct host format
+        # Port 6543 is for transaction pooler, port 5432 for direct connection
+        PSQL_CMD="PGPASSWORD='$SUPABASE_DB_PASSWORD' psql -h db.${PROJECT_REF}.supabase.co -p 5432 -U postgres -d postgres"
         echo "   Project: $PROJECT_REF"
     fi
     echo ""

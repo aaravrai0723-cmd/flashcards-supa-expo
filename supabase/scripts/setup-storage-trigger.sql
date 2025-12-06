@@ -54,7 +54,7 @@ BEGIN
       mime_type,
       meta
     ) VALUES (
-      user_id::TEXT,
+      user_id,
       'upload',
       file_path,
       mime_type,
@@ -77,10 +77,10 @@ BEGIN
         'storage_path', file_path,
         'mime_type', mime_type,
         'file_size', file_size,
-        'owner', user_id::TEXT,
+        'owner', user_id,
         'bucket', NEW.bucket_id
       ),
-      user_id::TEXT
+      user_id
     );
 
     -- Log for debugging

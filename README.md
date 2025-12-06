@@ -95,6 +95,9 @@ bun install
 # Set up environment variables
 cp .env.example .env.local
 # Edit .env.local with your values
+
+# Prepare mobile env (Expo reads from apps/mobile/.env when running there)
+cp .env.example apps/mobile/.env
 ```
 
 ### Environment Setup
@@ -198,6 +201,14 @@ Note: Only required if using AI-powered card generation features
 3. Generate three security secrets with `openssl rand -base64 32`
 4. (Optional) Add OpenAI API key for AI features
 5. Save `.env.local` and proceed with database setup
+
+### Local Supabase for Development
+
+- Start local services: `supabase start` (uses Docker, no new Supabase project is created)
+- Apply schema locally: `npm run db:push`
+- (Optional) Seed sample data locally: `npm run db:seed`
+- Scripts auto-prefer local if it is running; otherwise they use your remote project based on `.env.local`
+- Mobile dev: copy env for Expo (`cp .env.example apps/mobile/.env`) so the mobile app reads the same values
 
 ### Database Setup
 

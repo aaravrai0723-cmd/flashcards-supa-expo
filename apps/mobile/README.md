@@ -19,7 +19,14 @@ A modern flashcards mobile application built with Expo Router and React Native, 
    ```
 
 2. **Environment Configuration**
-   Create `.env.local` in the project root:
+   Copy the example env so Expo picks up values when running inside `apps/mobile`:
+   ```bash
+   # From repo root
+   cp .env.example .env.local
+   cp .env.example apps/mobile/.env
+   ```
+
+   Or create `.env.local` in the project root manually:
    ```env
    EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
    EXPO_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
