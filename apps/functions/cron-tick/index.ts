@@ -14,9 +14,9 @@ serve(async (req) => {
     // Verify cron secret from custom header
     const cronSecret = Deno.env.get('CRON_SECRET');
     if (cronSecret) {
-      const providedSecret = req.headers.get('x-cron-secret');
+      const providedSecret = getCronSecretFromHeaders(req.headers);
       if (!providedSecret || providedSecret !== cronSecret) {
-        log('error', 'Invalid cron authentication');
+        log('error', 'Invalid cron authentication', { hasAuthHeader: !!req.headers.get('authorization'), hasCronHeader: !!req.headers.get('x-cron-secret') });
         return createErrorResponse('Unauthorized', 401);
       }
     }
@@ -103,6 +103,18 @@ function getWorkerPullUrl(): string {
   const supabaseUrl = getRequiredEnv('SUPABASE_URL');
   const projectRef = supabaseUrl.split('//')[1].split('.')[0];
   return `${supabaseUrl}/functions/v1/worker-pull`;
+}
+
+// Accept cron secret via either custom header or Bearer token (to match docs)
+function getCronSecretFromHeaders(headers: Headers): string | null {
+  const cronHeader = headers.get('x-cron-secret');
+  if (cronHeader) return cronHeader;
+
+  const authHeader = headers.get('authorization');
+  if (!authHeader) return null;
+
+  const match = authHeader.match(/^Bearer\s+(.*)$/i);
+  return match ? match[1].trim() : null;
 }
 
 // Health check endpoint

@@ -29,7 +29,7 @@ print_error() {
     echo -e "${RED}✗${NC} $1"
 }
 
-# Function to load .env file
+# Function to load .env file (supports being run from any directory)
 load_env() {
     local env_file="$1"
 
@@ -40,9 +40,10 @@ load_env() {
 
     print_info "Loading environment variables from: $env_file"
 
-    # Export variables from .env file (ignore comments and empty lines)
+    # Export variables from .env file. Using 'source' here handles quoted values and spaces.
     set -a
-    source <(grep -v '^#' "$env_file" | grep -v '^$' | sed 's/^/export /')
+    # shellcheck source=/dev/null
+    source "$env_file"
     set +a
 }
 
@@ -72,7 +73,7 @@ set_secret() {
 
     print_info "Setting secret: $secret_name"
 
-    if npx supabase secrets set "$secret_name=$secret_value" --no-inherit-env; then
+    if npx supabase secrets set "$secret_name=$secret_value"; then
         print_success "$secret_name has been set"
         return 0
     else
@@ -89,8 +90,17 @@ main() {
     print_info "==============================================="
     echo ""
 
+    # Resolve repo root (script can be run from anywhere)
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
     # Determine which .env file to use
-    ENV_FILE="${1:-.env.local}"
+    ENV_FILE="${1:-$REPO_ROOT/.env.local}"
+
+    # If user passed a relative path, resolve it from repo root for convenience
+    if [ ! -f "$ENV_FILE" ] && [ -f "$REPO_ROOT/$ENV_FILE" ]; then
+        ENV_FILE="$REPO_ROOT/$ENV_FILE"
+    fi
 
     if [ ! -f "$ENV_FILE" ]; then
         print_error "Environment file not found: $ENV_FILE"
