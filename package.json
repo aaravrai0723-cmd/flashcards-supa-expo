@@ -7,7 +7,7 @@
     "apps/*",
     "packages/*"
   ],
-  "scripts": {Y
+  "scripts": {
     "dev": "npm run dev -w mobile",
     "dev:mobile": "npm run start -w mobile",
     "dev:tunnel": "npm run tunnel -w mobile",
