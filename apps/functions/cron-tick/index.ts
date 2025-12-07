@@ -76,13 +76,15 @@ async function processJobsMultiple(iterations: number, delay: number): Promise<a
 async function callWorkerPull(): Promise<any> {
   const workerUrl = getWorkerPullUrl();
   const workerSecret = getRequiredEnv('JOB_WORKER_SECRET');
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('APP_SUPABASE_SERVICE_ROLE_KEY');
   
   try {
     const response = await fetch(workerUrl, {
       method: 'POST',
       headers: {
         'x-worker-secret': workerSecret,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        ...(serviceRoleKey ? { Authorization: `Bearer ${serviceRoleKey}` } : {})
       }
     });
     
@@ -100,7 +102,7 @@ async function callWorkerPull(): Promise<any> {
 
 // Get worker pull URL
 function getWorkerPullUrl(): string {
-  const supabaseUrl = getRequiredEnv('SUPABASE_URL');
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') || Deno.env.get('APP_SUPABASE_URL') || getRequiredEnv('SUPABASE_URL');
   const projectRef = supabaseUrl.split('//')[1].split('.')[0];
   return `${supabaseUrl}/functions/v1/worker-pull`;
 }

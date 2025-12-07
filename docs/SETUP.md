@@ -732,9 +732,86 @@ npm run dev
 
 # Or specifically for mobile
 npm run dev:mobile
+
+# Or with tunnel mode (required for OAuth authentication)
+npm run dev:tunnel
 ```
 
 This will start the Expo development server.
+
+#### 🔐 When to Use Tunnel Mode
+
+**Use tunnel mode (`npm run dev:tunnel`) when:**
+- Testing OAuth authentication (Google, Apple Sign In)
+- Testing on physical devices that aren't on the same network
+- You need a stable, publicly accessible URL for OAuth redirects
+- Testing deep links and redirect URLs
+
+**Use standard mode (`npm run dev`) when:**
+- Doing general development work
+- Testing on emulators/simulators
+- Not testing authentication flows
+
+#### Why Tunnel Mode is Required for OAuth
+
+OAuth providers (Google, Apple) require **exact redirect URL matches**. When you configure OAuth:
+
+1. **Without tunnel**: Your app URL changes every time (e.g., `exp://192.168.1.5:8081`)
+   - ❌ Can't configure a stable redirect URL
+   - ❌ OAuth providers reject mismatched URLs
+   - ❌ Authentication will fail
+
+2. **With tunnel**: You get a stable ngrok URL (e.g., `https://abc123.ngrok.io`)
+   - ✅ Configure this URL in OAuth provider settings
+   - ✅ URL stays the same across sessions
+   - ✅ Authentication works correctly
+
+#### Setting Up OAuth with Tunnel Mode
+
+**Step 1: Start in tunnel mode**
+```bash
+npm run dev:tunnel
+```
+
+Wait for the tunnel URL to appear (e.g., `https://abc123.ngrok.io`)
+
+**Step 2: Configure OAuth redirect URLs**
+
+For your Supabase project, the redirect URL is:
+```
+https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback
+```
+
+This stays the same and is already configured in your OAuth providers.
+
+**Step 3: Update mobile app deep link (if needed)**
+
+The mobile app needs to handle the OAuth callback. With tunnel mode, Expo handles this automatically through the tunnel URL.
+
+**Step 4: Test OAuth flow**
+
+1. Open your app via the tunnel URL
+2. Tap "Sign in with Google" or "Sign in with Apple"
+3. Complete authentication in the browser/system dialog
+4. You'll be redirected back to the app
+5. Verify you're signed in
+
+#### Troubleshooting Tunnel Mode
+
+**Tunnel not starting?**
+- Check your internet connection
+- Try clearing Expo cache: `cd apps/mobile && npx expo start -c --tunnel`
+- Update Expo CLI: `npm install -g expo-cli`
+
+**OAuth still not working?**
+- Verify redirect URLs match exactly in OAuth provider settings
+- Check that OAuth is enabled in Supabase Dashboard
+- See detailed guide: [docs/OAUTH_SETUP.md](./OAUTH_SETUP.md)
+
+**Tunnel URL keeps changing?**
+- This is normal - ngrok generates a new URL each time
+- For production, use a custom domain with Expo EAS
+- For development, update OAuth settings if the tunnel URL changes
 
 ### 3. Open the App
 

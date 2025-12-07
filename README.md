@@ -244,6 +244,9 @@ npm run dev
 # or pnpm dev
 # or bun run dev
 
+# Start mobile app in tunnel mode (required for OAuth authentication)
+npm run dev:tunnel
+
 # Build SDK package (for Edge Functions or manual builds)
 npm run build:sdk
 # or pnpm build:sdk

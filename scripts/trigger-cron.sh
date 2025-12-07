@@ -6,9 +6,22 @@
 set -e
 
 # Configuration
-PROJECT_REF="xzpyvvkqfnurbxqwcyrx"
 ITERATIONS=${1:-5}  # Default to 5 iterations
 DELAY_MS=${2:-1000}  # Default to 1 second delay between iterations
+
+# Resolve repo root (script can be run from anywhere)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Derive Supabase URL (prefer env, fallback to .env.local)
+if [ -z "$SUPABASE_URL" ] && [ -f "$REPO_ROOT/.env.local" ]; then
+  SUPABASE_URL="$(grep -m1 '^SUPABASE_URL=' "$REPO_ROOT/.env.local" | cut -d= -f2-)"
+fi
+
+if [ -z "$SUPABASE_URL" ]; then
+  echo "Error: SUPABASE_URL is not set and could not be read from .env.local"
+  exit 1
+fi
 
 # Check if CRON_SECRET is set
 if [ -z "$CRON_SECRET" ]; then
@@ -37,14 +50,14 @@ if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
 fi
 
 echo "Triggering cron to process jobs..."
-echo "Project: $PROJECT_REF"
+echo "Project URL: $SUPABASE_URL"
 echo "Iterations: $ITERATIONS"
 echo "Delay: ${DELAY_MS}ms"
 echo ""
 
 # Call the cron-tick function
 RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST \
-  "https://${PROJECT_REF}.supabase.co/functions/v1/cron-tick" \
+  "${SUPABASE_URL}/functions/v1/cron-tick" \
   -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
   -H "x-cron-secret: $CRON_SECRET" \
   -H "Content-Type: application/json" \

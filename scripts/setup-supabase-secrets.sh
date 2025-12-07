@@ -120,6 +120,12 @@ main() {
     all_vars_set=true
 
     # Check all required variables
+    # We use APP_* because Supabase CLI blocks secrets that start with SUPABASE_
+    # Values are sourced from SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your env file.
+    check_var "SUPABASE_URL" || all_vars_set=false
+    check_var "SUPABASE_SERVICE_ROLE_KEY" || all_vars_set=false
+    check_var "APP_SUPABASE_URL" || true
+    check_var "APP_SUPABASE_SERVICE_ROLE_KEY" || true
     check_var "OPENAI_API_KEY" || all_vars_set=false
     check_var "FILE_PROCESSING_WEBHOOK_SECRET" || all_vars_set=false
     check_var "JOB_WORKER_SECRET" || all_vars_set=false
@@ -145,6 +151,19 @@ main() {
     # Set secrets in Supabase
     success_count=0
     fail_count=0
+
+    # APP_* mirrors to bypass Supabase CLI restrictions on SUPABASE_* secrets
+    if [ -n "$SUPABASE_URL" ] && set_secret "APP_SUPABASE_URL" "$SUPABASE_URL"; then
+        ((success_count++))
+    else
+        ((fail_count++))
+    fi
+
+    if [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] && set_secret "APP_SUPABASE_SERVICE_ROLE_KEY" "$SUPABASE_SERVICE_ROLE_KEY"; then
+        ((success_count++))
+    else
+        ((fail_count++))
+    fi
 
     if set_secret "OPENAI_API_KEY" "$OPENAI_API_KEY"; then
         ((success_count++))

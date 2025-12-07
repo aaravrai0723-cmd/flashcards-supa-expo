@@ -6,8 +6,21 @@
 set -e
 
 # Configuration
-PROJECT_REF="xzpyvvkqfnurbxqwcyrx"
 ITERATIONS=${1:-5}  # Default to 5 iterations
+
+# Resolve repo root (script can be run from anywhere)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Derive Supabase URL (prefer env, fallback to .env.local)
+if [ -z "$SUPABASE_URL" ] && [ -f "$REPO_ROOT/.env.local" ]; then
+  SUPABASE_URL="$(grep -m1 '^SUPABASE_URL=' "$REPO_ROOT/.env.local" | cut -d= -f2-)"
+fi
+
+if [ -z "$SUPABASE_URL" ]; then
+  echo "Error: SUPABASE_URL is not set and could not be read from .env.local"
+  exit 1
+fi
 
 # Check if JOB_WORKER_SECRET is set
 if [ -z "$JOB_WORKER_SECRET" ]; then
@@ -36,12 +49,12 @@ if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
 fi
 
 echo "Triggering worker to process $ITERATIONS jobs..."
-echo "Project: $PROJECT_REF"
+echo "Project URL: $SUPABASE_URL"
 echo ""
 
 # Call the worker-pull function directly
 RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST \
-  "https://${PROJECT_REF}.supabase.co/functions/v1/worker-pull" \
+  "${SUPABASE_URL}/functions/v1/worker-pull" \
   -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
   -H "x-worker-secret: $JOB_WORKER_SECRET" \
   -H "Content-Type: application/json")

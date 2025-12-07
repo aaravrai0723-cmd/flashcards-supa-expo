@@ -5,14 +5,53 @@ This directory contains Supabase Edge Functions for the flashcards application, 
 ## Architecture
 
 ```
-Client Upload → Storage Webhook → Job Queue → Worker Processing → Media Assets + Cards
+Client Upload → Storage Trigger → Job Queue → pg_cron → Worker Processing → Media Assets + Cards
 ```
 
 ### Components
 
-1. **ingest-webhook**: Receives storage upload notifications and creates processing jobs
-2. **worker-pull**: Processes queued jobs (image/video/PDF analysis, AI card generation)
-3. **cron-tick**: Triggers job processing on a schedule (optional)
+1. **Storage Trigger** (Database): Automatically creates jobs when files are uploaded
+2. **worker-pull** (Edge Function): Processes queued jobs (image/video/PDF analysis, AI card generation)
+3. **cron-tick** (Edge Function): Triggers worker-pull to process multiple jobs
+4. **pg_cron** (Database): Automatically calls cron-tick every minute for continuous processing
+
+### How Automatic Processing Works
+
+1. User uploads file → Creates entry in `ingest_files` table
+2. Database trigger → Creates job in `jobs` table with status `queued`
+3. pg_cron (runs every minute) → Calls `cron-tick` edge function
+4. cron-tick → Calls `worker-pull` to process queued jobs
+5. worker-pull → Processes job, creates media assets and cards, updates status to `done`
+
+**Note**: Edge functions don't run automatically - they must be triggered. The pg_cron setup (migration `005_setup_job_processing_cron.sql`) enables automatic processing.
+
+## Quick Start
+
+### For Immediate Job Processing
+
+```bash
+# Process all queued jobs manually
+export JOB_WORKER_SECRET='your-secret'
+export SUPABASE_SERVICE_ROLE_KEY='your-key'
+./scripts/trigger-worker.sh
+```
+
+Run multiple times until all jobs are processed.
+
+### Set Up Automatic Processing
+
+```bash
+# 1. Deploy migrations
+npx supabase db push
+
+# 2. Add DATABASE_URL to .env.local (get from Supabase Dashboard)
+# DATABASE_URL='postgresql://...'
+
+# 3. Configure pg_cron
+./scripts/setup-cron-config.sh
+```
+
+Jobs will now process automatically every minute. See [AUTOMATIC_JOB_PROCESSING.md](../../AUTOMATIC_JOB_PROCESSING.md) for details.
 
 ## Local Development
 
@@ -319,74 +358,74 @@ WHERE trigger_name = 'on_storage_object_created';
 
 #### Step 7: Set Up Automated Job Processing
 
-You have two options for processing jobs automatically:
+**IMPORTANT**: Edge functions don't run automatically - they need to be triggered. The migration `005_setup_job_processing_cron.sql` sets up automatic processing using pg_cron.
 
-**Option A: Using pg_cron (Recommended for Production)**
+**Recommended Setup (pg_cron - Built into Database)**
 
-This runs the job processor every minute directly from your database:
+1. **Deploy the migration** (includes pg_cron setup):
+   ```bash
+   npx supabase db push
+   ```
 
-```sql
--- Enable pg_cron extension if not already enabled
-CREATE EXTENSION IF NOT EXISTS pg_cron;
+2. **Get your database connection string**:
+   - Go to [Database Settings](https://supabase.com/dashboard/project/YOUR_PROJECT_REF/settings/database)
+   - Copy the "Connection string" (use the pooler)
+   - Add your password
+   - Add to `.env.local`:
+     ```
+     DATABASE_URL='postgresql://postgres.YOUR_PROJECT_REF:[PASSWORD]@aws-0-us-west-1.pooler.supabase.com:6543/postgres'
+     ```
 
--- Schedule job processing every minute
-SELECT cron.schedule(
-  'process-flashcard-jobs',        -- Job name
-  '* * * * *',                      -- Every minute
-  $$
-  SELECT net.http_post(
-    'https://YOUR_PROJECT_REF.supabase.co/functions/v1/cron-tick',
-    '{"iterations": 5, "delay": 1000}',
-    headers:='{"Authorization": "Bearer YOUR_CRON_SECRET", "Content-Type": "application/json"}'::jsonb
-  );
-  $$
-);
-```
+3. **Configure pg_cron settings**:
+   ```bash
+   ./scripts/setup-cron-config.sh
+   ```
 
-Replace:
-- `YOUR_PROJECT_REF` with your actual Supabase project reference
-- `YOUR_CRON_SECRET` with your actual CRON_SECRET value
+   This sets up the database configuration needed for pg_cron to call your edge functions.
 
-**Option B: External Scheduler (GitHub Actions)**
+4. **Verify it's working**:
+   ```sql
+   -- Check cron job status
+   SELECT * FROM job_processing_status;
 
-Create `.github/workflows/process-jobs.yml`:
+   -- Check recent cron runs
+   SELECT * FROM cron.job_run_details
+   WHERE jobname = 'process-queued-jobs'
+   ORDER BY start_time DESC
+   LIMIT 10;
+   ```
 
-```yaml
-name: Process Flashcard Jobs
-on:
-  schedule:
-    - cron: '* * * * *'  # Every minute
-  workflow_dispatch:     # Allow manual trigger
+**What This Does**:
+- pg_cron runs every minute inside your database
+- Calls the `cron-tick` edge function automatically
+- Processes up to 5 queued jobs per minute
+- No external dependencies or services needed
 
-jobs:
-  process:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger Job Processing
-        run: |
-          curl -X POST https://YOUR_PROJECT_REF.supabase.co/functions/v1/cron-tick \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            -H "Content-Type: application/json" \
-            -d '{"iterations": 5, "delay": 1000}'
-```
+**For detailed documentation**, see [AUTOMATIC_JOB_PROCESSING.md](../../AUTOMATIC_JOB_PROCESSING.md)
 
-Add your `CRON_SECRET` to GitHub repository secrets.
+**Alternative: Manual Trigger (For Testing)**
 
-**Option C: Manual Trigger (For Testing)**
-
-Process jobs manually using curl:
+Process jobs manually using the provided scripts:
 
 ```bash
-# Trigger job processing manually
-curl -X POST https://YOUR_PROJECT_REF.supabase.co/functions/v1/worker-pull \
-  -H "Authorization: Bearer YOUR_JOB_WORKER_SECRET" \
-  -H "Content-Type: application/json"
+# Process jobs using the worker-pull function
+export JOB_WORKER_SECRET='your-secret'
+export SUPABASE_SERVICE_ROLE_KEY='your-key'
+./scripts/trigger-worker.sh
 
 # Or use cron-tick for multiple iterations
-curl -X POST https://YOUR_PROJECT_REF.supabase.co/functions/v1/cron-tick \
-  -H "Authorization: Bearer YOUR_CRON_SECRET" \
-  -H "Content-Type: application/json" \
-  -d '{"iterations": 5, "delay": 1000}'
+export CRON_SECRET='your-secret'
+export SUPABASE_SERVICE_ROLE_KEY='your-key'
+./scripts/trigger-cron.sh 5 1000  # Process 5 jobs with 1 second delay
+```
+
+**Alternative: Database Function**
+
+Call the database function directly from SQL:
+
+```sql
+-- Process 5 jobs manually
+SELECT manual_process_jobs(5);
 ```
 
 ### Post-Deployment Verification
@@ -652,40 +691,84 @@ supabase functions serve worker-pull --env-file .env.local
 **Symptoms**: Jobs created but never processed, remain in "queued" forever
 
 **Causes**:
-1. **Storage trigger not installed** - Jobs not created automatically
-2. **Worker not running** - No automated processing set up
-3. **Incorrect job input data** - Missing required fields
+1. **Automatic processing not set up** - Edge functions don't run automatically
+2. **pg_cron not configured** - Database settings missing
+3. **Storage trigger not installed** - Jobs not created automatically
+4. **Incorrect job input data** - Missing required fields
 
 **Solutions**:
 
-1. **Verify storage trigger exists**:
-   ```sql
-   SELECT trigger_name FROM information_schema.triggers
-   WHERE trigger_name = 'on_storage_object_created';
-   ```
-   If missing, run `supabase/setup-storage-trigger.sql` in SQL Editor
+1. **Set up automatic job processing** (MOST COMMON ISSUE):
 
-2. **Check job input format**:
-   ```sql
-   SELECT id, type, input FROM jobs WHERE status = 'queued' LIMIT 1;
-   ```
-   Should have: `storage_path`, `mime_type`, `owner` (snake_case, not camelCase)
+   Edge functions need to be triggered to run. Follow these steps:
 
-3. **Manually trigger processing**:
+   ```bash
+   # 1. Deploy the pg_cron migration
+   npx supabase db push
+
+   # 2. Get your database connection string from Dashboard
+   # Add to .env.local:
+   # DATABASE_URL='postgresql://postgres.YOUR_REF:[PASSWORD]@...pooler.supabase.com:6543/postgres'
+
+   # 3. Configure pg_cron
+   ./scripts/setup-cron-config.sh
+
+   # 4. Verify it's working
+   # Wait 1-2 minutes, then check the database
+   ```
+
+   **For complete setup guide**, see [AUTOMATIC_JOB_PROCESSING.md](../../AUTOMATIC_JOB_PROCESSING.md)
+
+2. **Manually trigger processing** (for immediate results):
    ```bash
    export JOB_WORKER_SECRET='your_secret'
    export SUPABASE_SERVICE_ROLE_KEY='your_service_role_key'
    ./scripts/trigger-worker.sh
    ```
 
-4. **Set up automated processing**:
-   - See [Job Processing Setup](../../docs/SETUP.md#job-processing-setup)
-   - Use pg_cron to auto-process jobs every minute
+   Run multiple times to process all queued jobs.
 
-**Recent Fixes** (Nov 27, 2025):
-- ✅ Fixed field name mismatch in storage trigger (camelCase → snake_case)
-- ✅ Added backwards compatibility for missing owner field
-- ✅ Updated storage trigger to create `ingest_files` records
+3. **Verify pg_cron is running**:
+   ```sql
+   -- Check if pg_cron extensions are enabled
+   SELECT * FROM pg_extension WHERE extname IN ('pg_cron', 'http');
+
+   -- Check if cron job exists
+   SELECT * FROM cron.job WHERE jobname = 'process-queued-jobs';
+
+   -- Check recent cron runs
+   SELECT * FROM cron.job_run_details
+   WHERE jobname = 'process-queued-jobs'
+   ORDER BY start_time DESC
+   LIMIT 5;
+   ```
+
+4. **Check database configuration**:
+   ```sql
+   -- Verify settings are configured
+   SELECT name, setting FROM pg_settings WHERE name LIKE 'app.settings.%';
+   ```
+
+   Should show: `supabase_url`, `cron_secret`, and `service_role_key`
+
+5. **Verify storage trigger exists**:
+   ```sql
+   SELECT trigger_name FROM information_schema.triggers
+   WHERE trigger_name = 'create_ingest_job_trigger';
+   ```
+   If missing, jobs won't be created when files are uploaded.
+
+6. **Check job input format**:
+   ```sql
+   SELECT id, type, input FROM jobs WHERE status = 'queued' LIMIT 1;
+   ```
+   Should have: `storage_path`, `mime_type`, `owner` (snake_case, not camelCase)
+
+**Recent Updates** (Dec 6, 2025):
+- ✅ Added migration-based pg_cron setup (005_setup_job_processing_cron.sql)
+- ✅ Created automatic configuration script (setup-cron-config.sh)
+- ✅ Added manual processing helper functions
+- ✅ Created comprehensive documentation (AUTOMATIC_JOB_PROCESSING.md)
 
 ### Jobs Failing with OpenAI Errors
 
@@ -763,9 +846,18 @@ This provides backwards compatibility with old job formats.
 
 ---
 
-## Recent Updates (Nov 27, 2025)
+## Recent Updates
 
-All critical bugs have been fixed. The image processing pipeline is now fully functional:
+### December 6, 2025 - Automatic Job Processing Setup
+
+✅ **New Features**:
+- Added automatic job processing with pg_cron (migration `005_setup_job_processing_cron.sql`)
+- Created setup script for pg_cron configuration (`scripts/setup-cron-config.sh`)
+- Added database functions for manual job processing
+- Created comprehensive documentation ([AUTOMATIC_JOB_PROCESSING.md](../../AUTOMATIC_JOB_PROCESSING.md))
+- Jobs now process automatically every minute (no manual triggering required)
+
+### November 27, 2025 - Pipeline Fixes
 
 ✅ **Fixed Issues**:
 - Import errors causing BOOT_ERROR
@@ -783,6 +875,6 @@ All critical bugs have been fixed. The image processing pipeline is now fully fu
 - Thumbnails stored in derived bucket
 - OpenAI Vision API calls successful
 
-For detailed changelog, see [CHANGELOG.md](../../CHANGELOG.md).
+---
 
-For complete troubleshooting guide, see [README.md](../../README.md#troubleshooting).
+For detailed troubleshooting guide, see above or [AUTOMATIC_JOB_PROCESSING.md](../../AUTOMATIC_JOB_PROCESSING.md).

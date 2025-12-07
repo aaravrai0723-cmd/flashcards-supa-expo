@@ -82,8 +82,9 @@ export async function verifyWebhookSignatureAsync(
 
 // Supabase client factory with service role
 export function createServiceRoleClient(): ReturnType<typeof createClient<Database>> {
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  // Supabase CLI blocks secrets prefixed with SUPABASE_, so we allow APP_* fallbacks
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') || Deno.env.get('APP_SUPABASE_URL');
+  const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('APP_SUPABASE_SERVICE_ROLE_KEY');
   
   if (!supabaseUrl || !supabaseServiceRoleKey) {
     throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables');
