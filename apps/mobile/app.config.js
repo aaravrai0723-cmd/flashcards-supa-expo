@@ -31,7 +31,15 @@ export default {
     },
     scheme: "flashcards",
     plugins: [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-build-properties",
+        {
+          ios: {
+            useFrameworks: "static"
+          }
+        }
+      ]
     ],
     extra: {
       supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,

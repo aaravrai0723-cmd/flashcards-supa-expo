@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "npm run dev -w mobile",
     "dev:mobile": "npm run start -w mobile",
+    "dev:tunnel": "npm run tunnel -w mobile",
     "build": "npm run build -w sdk && npm run build -w mobile",
     "build:sdk": "npm run build -w sdk",
     "lint": "npm run lint -ws --if-present",

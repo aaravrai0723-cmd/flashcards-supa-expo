@@ -15,11 +15,11 @@ import { createAIClient, GeneratedCard } from '../_internals/ai.ts';
 // Worker endpoint for processing jobs
 serve(async (req) => {
   try {
-    // Verify worker secret
+    // Verify worker secret from custom header
     const workerSecret = getRequiredEnv('JOB_WORKER_SECRET');
-    const authHeader = req.headers.get('authorization');
-    
-    if (!authHeader || authHeader !== `Bearer ${workerSecret}`) {
+    const providedSecret = req.headers.get('x-worker-secret');
+
+    if (!providedSecret || providedSecret !== workerSecret) {
       log('error', 'Invalid worker authentication');
       return createErrorResponse('Unauthorized', 401);
     }
@@ -144,19 +144,22 @@ async function processJobs(): Promise<{ processed: number; jobs: any[] }> {
 async function processImageJob(job: any): Promise<any> {
   const supabase = createServiceRoleClient();
   const { input } = job;
-  
+
   try {
     log('info', 'Processing image job', { jobId: job.id, storagePath: input.storage_path });
 
+    // Extract owner from input or storage path (for backwards compatibility)
+    const owner = input.owner || input.storage_path.split('/')[0];
+
     // Process the image
     const result = await processImage(input.storage_path);
-    
+
     // Create media asset record
     const mediaAssetId = await createMediaAssetRecord(
       input.storage_path,
       'image',
       input.mime_type,
-      input.owner,
+      owner,
       {
         width_px: result.metadata.width,
         height_px: result.metadata.height,
@@ -167,7 +170,7 @@ async function processImageJob(job: any): Promise<any> {
 
     // Create a draft card with AI-generated prompt
     const cardId = await createDraftCard(
-      input.owner, // Using owner as a placeholder deck ID - in production, you'd have a default deck
+      owner, // Using owner as a placeholder deck ID - in production, you'd have a default deck
       `Label the key parts of this image: ${result.description.description}`,
       mediaAssetId,
       {
@@ -196,9 +199,12 @@ async function processImageJob(job: any): Promise<any> {
 async function processVideoJob(job: any): Promise<any> {
   const supabase = createServiceRoleClient();
   const { input } = job;
-  
+
   try {
     log('info', 'Processing video job', { jobId: job.id, storagePath: input.storage_path });
+
+    // Extract owner from input or storage path (for backwards compatibility)
+    const owner = input.owner || input.storage_path.split('/')[0];
 
     // Process the video
     const result = await processVideo(input.storage_path);
@@ -208,7 +214,7 @@ async function processVideoJob(job: any): Promise<any> {
       input.storage_path,
       'video',
       input.mime_type,
-      input.owner,
+      owner,
       {
         width_px: result.metadata.width,
         height_px: result.metadata.height,
@@ -222,7 +228,7 @@ async function processVideoJob(job: any): Promise<any> {
     // Create draft card for video analysis
     const keyframeDescriptions = result.keyframes.map(kf => kf.description.description).join('; ');
     const cardId = await createDraftCard(
-      input.owner,
+      owner,
       `What's the next step in this video sequence? Key moments: ${keyframeDescriptions}`,
       mediaAssetId,
       {
@@ -252,9 +258,12 @@ async function processVideoJob(job: any): Promise<any> {
 async function processPDFJob(job: any): Promise<any> {
   const supabase = createServiceRoleClient();
   const { input } = job;
-  
+
   try {
     log('info', 'Processing PDF job', { jobId: job.id, storagePath: input.storage_path });
+
+    // Extract owner from input or storage path (for backwards compatibility)
+    const owner = input.owner || input.storage_path.split('/')[0];
 
     // Process the PDF
     const result = await processPDF(input.storage_path);
@@ -269,7 +278,7 @@ async function processPDFJob(job: any): Promise<any> {
         page.imageUrl,
         'image',
         'image/jpeg',
-        input.owner,
+        owner,
         {
           alt_text: `PDF page ${page.pageNumber} content`,
           source_url: page.imageUrl
@@ -280,7 +289,7 @@ async function processPDFJob(job: any): Promise<any> {
 
       // Create draft card for the page
       const cardId = await createDraftCard(
-        input.owner,
+        owner,
         `Analyze the content on page ${page.pageNumber}: ${page.summary}`,
         mediaAssetId,
         {

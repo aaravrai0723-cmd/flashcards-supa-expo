@@ -420,63 +420,73 @@ CREATE POLICY "Users can delete their own ingest files" ON ingest_files
     FOR DELETE USING (auth.uid() = owner);
 
 -- Storage bucket policies
-CREATE POLICY "Media bucket: Users can upload their own files" ON storage.objects
-    FOR INSERT WITH CHECK (
-        bucket_id = 'media' 
-        AND auth.uid()::text = (storage.foldername(name))[1]
-    );
 
-CREATE POLICY "Media bucket: Users can view their own files" ON storage.objects
-    FOR SELECT USING (
-        bucket_id = 'media' 
-        AND auth.uid()::text = (storage.foldername(name))[1]
-    );
+
+  -- Allow authenticated users to upload files
+CREATE POLICY "Authenticated users can upload to media"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'media');
+
+-- Allow authenticated users to read files
+CREATE POLICY "Authenticated users can read from media"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (bucket_id = 'media');
+
+-- Optional: Allow users to update only their own uploads
+CREATE POLICY "Users can update own files from media"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (bucket_id = 'media' AND auth.uid()::text = (storage.foldername(name))[1])
+WITH CHECK (bucket_id = 'media' AND auth.uid()::text = (storage.foldername(name))[1]);
+
+-- Optional: Allow users to delete only their own files
+CREATE POLICY "Users can delete own files from media"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (bucket_id = 'media' AND auth.uid()::text = (storage.foldername(name))[1]);
+
+  -- Allow authenticated users to upload files
+CREATE POLICY "Authenticated users can upload to ingest"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'ingest');
+
+  -- Allow authenticated users to read files
+CREATE POLICY "Authenticated users can read from ingest"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (bucket_id = 'ingest');
+
+-- Optional: Allow users to update only their own uploads
+CREATE POLICY "Users can update own files from ingest"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (bucket_id = 'ingest' AND auth.uid()::text = (storage.foldername(name))[1])
+WITH CHECK (bucket_id = 'ingest' AND auth.uid()::text = (storage.foldername(name))[1]);
+
+-- Optional: Allow users to delete only their own files
+CREATE POLICY "Users can delete own files from ingest"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (bucket_id = 'ingest' AND auth.uid()::text = (storage.foldername(name))[1]);
 
 CREATE POLICY "Media bucket: Public read for public deck media" ON storage.objects
-    FOR SELECT USING (
-        bucket_id = 'media' 
-        AND EXISTS (
-            SELECT 1 FROM media_assets ma
-            JOIN card_media cm ON ma.id = cm.media_asset_id
-            JOIN cards c ON cm.card_id = c.id
-            JOIN decks d ON c.deck_id = d.id
-            WHERE ma.storage_path = name
-            AND d.visibility = 'public'
-        )
-    );
-
-CREATE POLICY "Media bucket: Users can update their own files" ON storage.objects
-    FOR UPDATE USING (
-        bucket_id = 'media' 
-        AND auth.uid()::text = (storage.foldername(name))[1]
-    );
-
-CREATE POLICY "Media bucket: Users can delete their own files" ON storage.objects
-    FOR DELETE USING (
-        bucket_id = 'media' 
-        AND auth.uid()::text = (storage.foldername(name))[1]
-    );
+FOR SELECT USING (
+                   bucket_id = 'media'
+                   AND EXISTS (
+                   SELECT 1 FROM media_assets ma
+                   JOIN card_media cm ON ma.id = cm.media_asset_id
+                   JOIN cards c ON cm.card_id = c.id
+                   JOIN decks d ON c.deck_id = d.id
+                   WHERE ma.storage_path = name
+                   AND d.visibility = 'public'
+                   )
+               );
 
 CREATE POLICY "Derived bucket: Service role can manage all files" ON storage.objects
     FOR ALL USING (
-        bucket_id = 'derived' 
+        bucket_id = 'derived'
         AND auth.jwt() ->> 'role' = 'service_role'
-    );
-
-CREATE POLICY "Ingest bucket: Users can upload their own files" ON storage.objects
-    FOR INSERT WITH CHECK (
-        bucket_id = 'ingest' 
-        AND auth.uid()::text = (storage.foldername(name))[1]
-    );
-
-CREATE POLICY "Ingest bucket: Users can view their own files" ON storage.objects
-    FOR SELECT USING (
-        bucket_id = 'ingest' 
-        AND auth.uid()::text = (storage.foldername(name))[1]
-    );
-
-CREATE POLICY "Ingest bucket: Users can delete their own files" ON storage.objects
-    FOR DELETE USING (
-        bucket_id = 'ingest' 
-        AND auth.uid()::text = (storage.foldername(name))[1]
     );

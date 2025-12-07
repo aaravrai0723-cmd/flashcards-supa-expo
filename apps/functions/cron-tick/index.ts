@@ -11,12 +11,12 @@ import {
 // Cron tick endpoint for triggering job processing
 serve(async (req) => {
   try {
-    // Verify cron secret (optional - can be called by pg_cron or external scheduler)
+    // Verify cron secret from custom header
     const cronSecret = Deno.env.get('CRON_SECRET');
     if (cronSecret) {
-      const authHeader = req.headers.get('authorization');
-      if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
-        log('error', 'Invalid cron authentication');
+      const providedSecret = getCronSecretFromHeaders(req.headers);
+      if (!providedSecret || providedSecret !== cronSecret) {
+        log('error', 'Invalid cron authentication', { hasAuthHeader: !!req.headers.get('authorization'), hasCronHeader: !!req.headers.get('x-cron-secret') });
         return createErrorResponse('Unauthorized', 401);
       }
     }
@@ -76,13 +76,15 @@ async function processJobsMultiple(iterations: number, delay: number): Promise<a
 async function callWorkerPull(): Promise<any> {
   const workerUrl = getWorkerPullUrl();
   const workerSecret = getRequiredEnv('JOB_WORKER_SECRET');
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('APP_SUPABASE_SERVICE_ROLE_KEY');
   
   try {
     const response = await fetch(workerUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${workerSecret}`,
-        'Content-Type': 'application/json'
+        'x-worker-secret': workerSecret,
+        'Content-Type': 'application/json',
+        ...(serviceRoleKey ? { Authorization: `Bearer ${serviceRoleKey}` } : {})
       }
     });
     
@@ -100,9 +102,21 @@ async function callWorkerPull(): Promise<any> {
 
 // Get worker pull URL
 function getWorkerPullUrl(): string {
-  const supabaseUrl = getRequiredEnv('SUPABASE_URL');
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') || Deno.env.get('APP_SUPABASE_URL') || getRequiredEnv('SUPABASE_URL');
   const projectRef = supabaseUrl.split('//')[1].split('.')[0];
   return `${supabaseUrl}/functions/v1/worker-pull`;
+}
+
+// Accept cron secret via either custom header or Bearer token (to match docs)
+function getCronSecretFromHeaders(headers: Headers): string | null {
+  const cronHeader = headers.get('x-cron-secret');
+  if (cronHeader) return cronHeader;
+
+  const authHeader = headers.get('authorization');
+  if (!authHeader) return null;
+
+  const match = authHeader.match(/^Bearer\s+(.*)$/i);
+  return match ? match[1].trim() : null;
 }
 
 // Health check endpoint

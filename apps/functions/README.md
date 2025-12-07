@@ -5,14 +5,53 @@ This directory contains Supabase Edge Functions for the flashcards application, 
 ## Architecture
 
 ```
-Client Upload → Storage Webhook → Job Queue → Worker Processing → Media Assets + Cards
+Client Upload → Storage Trigger → Job Queue → pg_cron → Worker Processing → Media Assets + Cards
 ```
 
 ### Components
 
-1. **ingest-webhook**: Receives storage upload notifications and creates processing jobs
-2. **worker-pull**: Processes queued jobs (image/video/PDF analysis, AI card generation)
-3. **cron-tick**: Triggers job processing on a schedule (optional)
+1. **Storage Trigger** (Database): Automatically creates jobs when files are uploaded
+2. **worker-pull** (Edge Function): Processes queued jobs (image/video/PDF analysis, AI card generation)
+3. **cron-tick** (Edge Function): Triggers worker-pull to process multiple jobs
+4. **pg_cron** (Database): Automatically calls cron-tick every minute for continuous processing
+
+### How Automatic Processing Works
+
+1. User uploads file → Creates entry in `ingest_files` table
+2. Database trigger → Creates job in `jobs` table with status `queued`
+3. pg_cron (runs every minute) → Calls `cron-tick` edge function
+4. cron-tick → Calls `worker-pull` to process queued jobs
+5. worker-pull → Processes job, creates media assets and cards, updates status to `done`
+
+**Note**: Edge functions don't run automatically - they must be triggered. The pg_cron setup (migration `005_setup_job_processing_cron.sql`) enables automatic processing.
+
+## Quick Start
+
+### For Immediate Job Processing
+
+```bash
+# Process all queued jobs manually
+export JOB_WORKER_SECRET='your-secret'
+export SUPABASE_SERVICE_ROLE_KEY='your-key'
+./scripts/trigger-worker.sh
+```
+
+Run multiple times until all jobs are processed.
+
+### Set Up Automatic Processing
+
+```bash
+# 1. Deploy migrations
+npx supabase db push
+
+# 2. Add DATABASE_URL to .env.local (get from Supabase Dashboard)
+# DATABASE_URL='postgresql://...'
+
+# 3. Configure pg_cron
+./scripts/setup-cron-config.sh
+```
+
+Jobs will now process automatically every minute. See [AUTOMATIC_JOB_PROCESSING.md](../../AUTOMATIC_JOB_PROCESSING.md) for details.
 
 ## Local Development
 
@@ -164,59 +203,346 @@ curl -X POST http://localhost:54321/functions/v1/monitoring/cleanup
 
 ## Deployment
 
-### Deploy to Supabase
+This section provides detailed instructions for deploying the Edge Functions to production.
+
+### Prerequisites
+
+Before deploying, make sure you have:
+
+1. **Supabase CLI installed**
+   ```bash
+   npm install -g supabase
+   ```
+
+2. **Project linked to Supabase**
+   ```bash
+   npx supabase link --project-ref YOUR_PROJECT_REF
+   ```
+
+3. **Environment variables configured in `.env.local`**
+   - `OPENAI_API_KEY` - Your OpenAI API key
+   - `FILE_PROCESSING_WEBHOOK_SECRET` - Webhook authentication secret
+   - `JOB_WORKER_SECRET` - Worker endpoint authentication secret
+   - `CRON_SECRET` - Cron endpoint authentication secret
+
+4. **Database migrations applied**
+   ```bash
+   npx supabase db push
+   ```
+
+### Step-by-Step Deployment Guide
+
+#### Step 1: Get Your OpenAI API Key
+
+If you don't have an OpenAI API key yet:
+
+1. Go to https://platform.openai.com/api-keys
+2. Sign in or create an account
+3. Click "Create new secret key"
+4. Copy the key and add it to your `.env.local` file
+
+```env
+OPENAI_API_KEY=sk-proj-...
+```
+
+#### Step 2: Generate Security Secrets
+
+Generate secure random secrets for webhook and worker authentication:
+
+```bash
+# Generate all three secrets at once
+openssl rand -hex 32  # Use for FILE_PROCESSING_WEBHOOK_SECRET
+openssl rand -hex 32  # Use for JOB_WORKER_SECRET
+openssl rand -hex 32  # Use for CRON_SECRET
+```
+
+Add these to your `.env.local` file:
+
+```env
+FILE_PROCESSING_WEBHOOK_SECRET=your_generated_secret_1
+JOB_WORKER_SECRET=your_generated_secret_2
+CRON_SECRET=your_generated_secret_3
+```
+
+#### Step 3: Set Supabase Secrets (Automated)
+
+Use the provided script to automatically set all secrets from your `.env.local` file:
+
+```bash
+# From the project root
+./scripts/setup-supabase-secrets.sh
+
+# Or specify a custom env file
+./scripts/setup-supabase-secrets.sh .env.production
+```
+
+The script will:
+- Read your environment variables
+- Validate that all required secrets are present
+- Set each secret in Supabase
+- Provide a summary of the operation
+
+**Manual Alternative:**
+
+If you prefer to set secrets manually:
+
+```bash
+# Set each secret individually
+npx supabase secrets set OPENAI_API_KEY=your_openai_key
+npx supabase secrets set FILE_PROCESSING_WEBHOOK_SECRET=your_webhook_secret
+npx supabase secrets set JOB_WORKER_SECRET=your_worker_secret
+npx supabase secrets set CRON_SECRET=your_cron_secret
+```
+
+#### Step 4: Verify Secrets
+
+```bash
+# List all secrets (values are hidden)
+npx supabase secrets list
+
+# You should see:
+# - OPENAI_API_KEY
+# - FILE_PROCESSING_WEBHOOK_SECRET
+# - JOB_WORKER_SECRET
+# - CRON_SECRET
+```
+
+#### Step 5: Deploy Edge Functions
 
 ```bash
 # Deploy all functions
-supabase functions deploy
+npx supabase functions deploy
 
-# Deploy specific functions
-supabase functions deploy ingest-webhook worker-pull cron-tick
+# Or deploy specific functions
+npx supabase functions deploy ingest-webhook worker-pull cron-tick health monitoring
 ```
 
-### Set Environment Variables
+The deployment will:
+- Bundle each function with its dependencies
+- Upload to Supabase infrastructure
+- Make functions available at `https://YOUR_PROJECT_REF.supabase.co/functions/v1/`
+
+#### Step 6: Configure Storage Trigger
+
+Set up automatic job creation when files are uploaded using a database trigger.
+
+**Using SQL (Recommended Method)**
+
+This is the preferred method as it's more reliable than webhooks:
+
+1. Go to your [Supabase SQL Editor](https://supabase.com/dashboard)
+2. Select your project → **SQL Editor** → **New query**
+3. Copy the contents of `supabase/setup-storage-trigger.sql`
+4. Click **Run** (no placeholders to replace!)
+
+The trigger will automatically create jobs in the database when files are uploaded to the `ingest` bucket.
+
+**What this does:**
+- Creates a database trigger that fires on file uploads
+- Directly inserts jobs into the `jobs` table
+- Determines job type based on mime type
+- More reliable than webhooks (no HTTP calls, no secrets needed)
+
+**Verify the trigger:**
+```sql
+SELECT trigger_name, event_object_table
+FROM information_schema.triggers
+WHERE trigger_name = 'on_storage_object_created';
+```
+
+**Note:** This approach is better than Storage Webhooks because it:
+- Works on all Supabase plans
+- Doesn't require webhook secrets
+- Can't fail due to network issues
+- Is faster (direct database insert)
+
+#### Step 7: Set Up Automated Job Processing
+
+**IMPORTANT**: Edge functions don't run automatically - they need to be triggered. The migration `005_setup_job_processing_cron.sql` sets up automatic processing using pg_cron.
+
+**Recommended Setup (pg_cron - Built into Database)**
+
+1. **Deploy the migration** (includes pg_cron setup):
+   ```bash
+   npx supabase db push
+   ```
+
+2. **Get your database connection string**:
+   - Go to [Database Settings](https://supabase.com/dashboard/project/YOUR_PROJECT_REF/settings/database)
+   - Copy the "Connection string" (use the pooler)
+   - Add your password
+   - Add to `.env.local`:
+     ```
+     DATABASE_URL='postgresql://postgres.YOUR_PROJECT_REF:[PASSWORD]@aws-0-us-west-1.pooler.supabase.com:6543/postgres'
+     ```
+
+3. **Configure pg_cron settings**:
+   ```bash
+   ./scripts/setup-cron-config.sh
+   ```
+
+   This sets up the database configuration needed for pg_cron to call your edge functions.
+
+4. **Verify it's working**:
+   ```sql
+   -- Check cron job status
+   SELECT * FROM job_processing_status;
+
+   -- Check recent cron runs
+   SELECT * FROM cron.job_run_details
+   WHERE jobname = 'process-queued-jobs'
+   ORDER BY start_time DESC
+   LIMIT 10;
+   ```
+
+**What This Does**:
+- pg_cron runs every minute inside your database
+- Calls the `cron-tick` edge function automatically
+- Processes up to 5 queued jobs per minute
+- No external dependencies or services needed
+
+**For detailed documentation**, see [AUTOMATIC_JOB_PROCESSING.md](../../AUTOMATIC_JOB_PROCESSING.md)
+
+**Alternative: Manual Trigger (For Testing)**
+
+Process jobs manually using the provided scripts:
 
 ```bash
-# Set secrets
-supabase secrets set FILE_PROCESSING_WEBHOOK_SECRET=your_secret
-supabase secrets set JOB_WORKER_SECRET=your_secret
-supabase secrets set OPENAI_API_KEY=your_key
+# Process jobs using the worker-pull function
+export JOB_WORKER_SECRET='your-secret'
+export SUPABASE_SERVICE_ROLE_KEY='your-key'
+./scripts/trigger-worker.sh
+
+# Or use cron-tick for multiple iterations
+export CRON_SECRET='your-secret'
+export SUPABASE_SERVICE_ROLE_KEY='your-key'
+./scripts/trigger-cron.sh 5 1000  # Process 5 jobs with 1 second delay
 ```
 
-### Configure Storage Webhook
+**Alternative: Database Function**
 
-In the Supabase dashboard:
-
-1. Go to Storage → Settings
-2. Add webhook URL: `https://your-project.supabase.co/functions/v1/ingest-webhook`
-3. Set webhook secret: `FILE_PROCESSING_WEBHOOK_SECRET`
-
-### Set up Cron Job (Optional)
-
-Using pg_cron extension:
+Call the database function directly from SQL:
 
 ```sql
--- Run every minute
-SELECT cron.schedule('process-jobs', '* * * * *', 'SELECT net.http_post(''https://your-project.supabase.co/functions/v1/cron-tick'', ''{"iterations": 5}'', ''{"Authorization": "Bearer your_cron_secret", "Content-Type": "application/json"}'');');
+-- Process 5 jobs manually
+SELECT manual_process_jobs(5);
 ```
 
-Or use external scheduler (GitHub Actions, etc.):
+### Post-Deployment Verification
 
-```yaml
-name: Process Jobs
-on:
-  schedule:
-    - cron: '* * * * *'  # Every minute
-jobs:
-  process:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger Job Processing
-        run: |
-          curl -X POST https://your-project.supabase.co/functions/v1/cron-tick \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            -H "Content-Type: application/json" \
-            -d '{"iterations": 5, "delay": 1000}'
+#### Test the Complete Pipeline
+
+1. **Upload a test image** in your mobile app
+   - Take a photo or upload an existing image
+   - The image should be uploaded to the `ingest` bucket
+
+2. **Check job creation**
+   ```sql
+   SELECT * FROM jobs
+   ORDER BY created_at DESC
+   LIMIT 5;
+   ```
+   You should see a new job with status `queued`
+
+3. **Trigger job processing** (if not using automatic processing)
+   ```bash
+   curl -X POST https://YOUR_PROJECT_REF.supabase.co/functions/v1/worker-pull \
+     -H "Authorization: Bearer YOUR_JOB_WORKER_SECRET"
+   ```
+
+4. **Check job completion**
+   ```sql
+   SELECT * FROM jobs
+   WHERE status = 'completed'
+   ORDER BY updated_at DESC
+   LIMIT 5;
+   ```
+
+5. **Verify media assets and cards were created**
+   ```sql
+   -- Check media assets
+   SELECT * FROM media_assets
+   ORDER BY created_at DESC
+   LIMIT 5;
+
+   -- Check generated cards (is_active=false until user approves)
+   SELECT * FROM cards
+   WHERE is_active = false
+   ORDER BY created_at DESC
+   LIMIT 5;
+   ```
+
+#### Check Function Health
+
+```bash
+# Basic health check
+curl https://YOUR_PROJECT_REF.supabase.co/functions/v1/health
+
+# Detailed health check
+curl "https://YOUR_PROJECT_REF.supabase.co/functions/v1/health?type=detailed"
+
+# Queue health check
+curl "https://YOUR_PROJECT_REF.supabase.co/functions/v1/health?type=queue"
+```
+
+#### Monitor Function Logs
+
+```bash
+# View logs for each function
+npx supabase functions logs ingest-webhook
+npx supabase functions logs worker-pull
+npx supabase functions logs cron-tick
+```
+
+### Configuration Reference
+
+#### Environment Variables / Secrets
+
+| Secret Name | Purpose | How to Generate |
+|------------|---------|-----------------|
+| `OPENAI_API_KEY` | OpenAI API access for vision and text generation | Get from https://platform.openai.com/api-keys |
+| `FILE_PROCESSING_WEBHOOK_SECRET` | Authenticates storage webhook requests | `openssl rand -hex 32` |
+| `JOB_WORKER_SECRET` | Authenticates worker endpoint requests | `openssl rand -hex 32` |
+| `CRON_SECRET` | Authenticates cron trigger requests | `openssl rand -hex 32` |
+| `GOOGLE_AI_API_KEY` | (Optional) Google AI API access | Get from Google Cloud Console |
+| `ANTHROPIC_API_KEY` | (Optional) Anthropic API access | Get from Anthropic Console |
+
+#### Function URLs
+
+After deployment, your functions will be available at:
+
+- **Ingest Webhook**: `https://YOUR_PROJECT_REF.supabase.co/functions/v1/ingest-webhook`
+- **Worker Pull**: `https://YOUR_PROJECT_REF.supabase.co/functions/v1/worker-pull`
+- **Cron Tick**: `https://YOUR_PROJECT_REF.supabase.co/functions/v1/cron-tick`
+- **Health Check**: `https://YOUR_PROJECT_REF.supabase.co/functions/v1/health`
+- **Monitoring**: `https://YOUR_PROJECT_REF.supabase.co/functions/v1/monitoring`
+
+### Updating Functions
+
+When you make changes to the functions:
+
+```bash
+# Deploy updated functions
+npx supabase functions deploy
+
+# Or deploy specific function
+npx supabase functions deploy worker-pull
+```
+
+Secrets are preserved during redeployment - you only need to set them once.
+
+### Rollback
+
+If you need to rollback a deployment:
+
+```bash
+# View deployment history
+npx supabase functions list
+
+# Deploy a specific version (if supported)
+# Or redeploy from a previous commit
+git checkout <previous-commit>
+npx supabase functions deploy
 ```
 
 ## Monitoring
@@ -325,3 +651,230 @@ apps/functions/
 - Client uploads go to `ingest/` bucket only
 - Processed files stored in `derived/` bucket
 - RLS policies control access to all data
+
+---
+
+## Troubleshooting
+
+### Function Returns 503 or BOOT_ERROR
+
+**Symptoms**: Functions fail to start, logs show "worker boot error" or "BOOT_ERROR"
+
+**Common Causes**:
+1. **Syntax errors in code** - Check function logs for specific line numbers
+2. **Missing imports** - Verify all imported functions exist
+3. **Environment variables missing** - Check `npx supabase secrets list`
+4. **Async/await issues** - Ensure async functions are properly declared
+
+**Solutions**:
+```bash
+# 1. Check function logs in Dashboard
+# Go to: Dashboard > Edge Functions > [function-name] > Logs
+
+# 2. Verify all secrets are set
+npx supabase secrets list
+
+# 3. Redeploy with latest code
+npx supabase functions deploy worker-pull ingest-webhook
+
+# 4. Test locally first
+supabase functions serve worker-pull --env-file .env.local
+```
+
+**Recent Fixes** (Nov 27, 2025):
+- ✅ Fixed async function syntax error in `utils.ts`
+- ✅ Added missing `getMediaAssetUrl` and `storeDerivedAsset` functions
+- ✅ Updated OpenAI model from deprecated `gpt-4-vision-preview` to `gpt-4o`
+
+### Jobs Stuck in "queued" Status
+
+**Symptoms**: Jobs created but never processed, remain in "queued" forever
+
+**Causes**:
+1. **Automatic processing not set up** - Edge functions don't run automatically
+2. **pg_cron not configured** - Database settings missing
+3. **Storage trigger not installed** - Jobs not created automatically
+4. **Incorrect job input data** - Missing required fields
+
+**Solutions**:
+
+1. **Set up automatic job processing** (MOST COMMON ISSUE):
+
+   Edge functions need to be triggered to run. Follow these steps:
+
+   ```bash
+   # 1. Deploy the pg_cron migration
+   npx supabase db push
+
+   # 2. Get your database connection string from Dashboard
+   # Add to .env.local:
+   # DATABASE_URL='postgresql://postgres.YOUR_REF:[PASSWORD]@...pooler.supabase.com:6543/postgres'
+
+   # 3. Configure pg_cron
+   ./scripts/setup-cron-config.sh
+
+   # 4. Verify it's working
+   # Wait 1-2 minutes, then check the database
+   ```
+
+   **For complete setup guide**, see [AUTOMATIC_JOB_PROCESSING.md](../../AUTOMATIC_JOB_PROCESSING.md)
+
+2. **Manually trigger processing** (for immediate results):
+   ```bash
+   export JOB_WORKER_SECRET='your_secret'
+   export SUPABASE_SERVICE_ROLE_KEY='your_service_role_key'
+   ./scripts/trigger-worker.sh
+   ```
+
+   Run multiple times to process all queued jobs.
+
+3. **Verify pg_cron is running**:
+   ```sql
+   -- Check if pg_cron extensions are enabled
+   SELECT * FROM pg_extension WHERE extname IN ('pg_cron', 'http');
+
+   -- Check if cron job exists
+   SELECT * FROM cron.job WHERE jobname = 'process-queued-jobs';
+
+   -- Check recent cron runs
+   SELECT * FROM cron.job_run_details
+   WHERE jobname = 'process-queued-jobs'
+   ORDER BY start_time DESC
+   LIMIT 5;
+   ```
+
+4. **Check database configuration**:
+   ```sql
+   -- Verify settings are configured
+   SELECT name, setting FROM pg_settings WHERE name LIKE 'app.settings.%';
+   ```
+
+   Should show: `supabase_url`, `cron_secret`, and `service_role_key`
+
+5. **Verify storage trigger exists**:
+   ```sql
+   SELECT trigger_name FROM information_schema.triggers
+   WHERE trigger_name = 'create_ingest_job_trigger';
+   ```
+   If missing, jobs won't be created when files are uploaded.
+
+6. **Check job input format**:
+   ```sql
+   SELECT id, type, input FROM jobs WHERE status = 'queued' LIMIT 1;
+   ```
+   Should have: `storage_path`, `mime_type`, `owner` (snake_case, not camelCase)
+
+**Recent Updates** (Dec 6, 2025):
+- ✅ Added migration-based pg_cron setup (005_setup_job_processing_cron.sql)
+- ✅ Created automatic configuration script (setup-cron-config.sh)
+- ✅ Added manual processing helper functions
+- ✅ Created comprehensive documentation (AUTOMATIC_JOB_PROCESSING.md)
+
+### Jobs Failing with OpenAI Errors
+
+**Symptoms**: Jobs fail with "OpenAI API error: Not Found" or similar
+
+**Causes**:
+1. **Deprecated model name** - Using old `gpt-4-vision-preview`
+2. **Invalid API key** - Key expired or has no credit
+3. **Rate limit exceeded** - Too many API calls
+
+**Solutions**:
+
+1. **Verify model name** (should be `gpt-4o`):
+   ```bash
+   grep "model:" apps/functions/_internals/ai.ts
+   # Should show: model: 'gpt-4o'
+   ```
+
+2. **Check API key**:
+   ```bash
+   # Verify secret is set
+   npx supabase secrets list | grep OPENAI_API_KEY
+
+   # Test API key manually
+   curl https://api.openai.com/v1/models \
+     -H "Authorization: Bearer YOUR_OPENAI_KEY"
+   ```
+
+3. **Check OpenAI account**:
+   - Go to https://platform.openai.com/account/billing
+   - Verify you have credits/billing set up
+   - Check usage limits
+
+**Recent Fixes** (Nov 27, 2025):
+- ✅ Updated to current OpenAI model: `gpt-4o` (supports vision)
+- ✅ Removed deprecated `gpt-4-vision-preview` references
+
+### Storage Path or Bucket Issues
+
+**Symptoms**: "Bucket not found", "Access denied", or "File not found" errors
+
+**Solutions**:
+
+1. **Verify buckets exist**:
+   - Go to Dashboard > Storage
+   - Should have: `ingest`, `media`, `derived`
+
+2. **Check file is in correct bucket**:
+   ```sql
+   SELECT bucket_id, name FROM storage.objects
+   WHERE name LIKE '%your-filename%';
+   ```
+
+3. **Verify processing reads from correct bucket**:
+   - Processing functions now default to `ingest` bucket
+   - Can be overridden if needed
+
+**Recent Fixes** (Nov 27, 2025):
+- ✅ Updated processing functions to use `ingest` bucket by default
+- ✅ Added bucket parameter for flexibility
+
+### Missing Owner Field
+
+**Symptoms**: "null value in column owner violates not-null constraint"
+
+**This issue is fixed** as of Nov 27, 2025. The worker now extracts owner from storage_path if not provided.
+
+**Verification**:
+```typescript
+// In worker-pull/index.ts, you should see:
+const owner = input.owner || input.storage_path.split('/')[0];
+```
+
+This provides backwards compatibility with old job formats.
+
+---
+
+## Recent Updates
+
+### December 6, 2025 - Automatic Job Processing Setup
+
+✅ **New Features**:
+- Added automatic job processing with pg_cron (migration `005_setup_job_processing_cron.sql`)
+- Created setup script for pg_cron configuration (`scripts/setup-cron-config.sh`)
+- Added database functions for manual job processing
+- Created comprehensive documentation ([AUTOMATIC_JOB_PROCESSING.md](../../AUTOMATIC_JOB_PROCESSING.md))
+- Jobs now process automatically every minute (no manual triggering required)
+
+### November 27, 2025 - Pipeline Fixes
+
+✅ **Fixed Issues**:
+- Import errors causing BOOT_ERROR
+- Bucket name mismatches
+- Storage trigger field name mismatches
+- Async function syntax errors
+- Deprecated OpenAI model
+- Missing owner field handling
+
+✅ **Verified Working**:
+- Worker deploys successfully
+- Jobs process correctly (status: "done")
+- Media assets created
+- Draft cards generated with AI descriptions
+- Thumbnails stored in derived bucket
+- OpenAI Vision API calls successful
+
+---
+
+For detailed troubleshooting guide, see above or [AUTOMATIC_JOB_PROCESSING.md](../../AUTOMATIC_JOB_PROCESSING.md).
